@@ -5,9 +5,11 @@ editor), a file tree, tabs — with an AI agent that reads, searches and edits y
 for real. Everything runs in your browser: your code never leaves your machine.**
 
 **[▶️ Live demo](https://code.elffuss.com)** ·
-**[✳️ Elffuss Claw (sibling project)](https://github.com/KikoCis/elffuss-claw)** ·
-**[🧬 Shared core](https://github.com/KikoCis/elffuss)** ·
+**[✳️ Elffuss Claw (sibling project)](https://github.com/utopia-ia/elffuss-claw)** ·
+**[🧬 Shared core](https://github.com/utopia-ia/elffuss)** ·
 **License: Apache-2.0**
+
+> Elffuss Code now lives in the UtopiaIA organization on GitHub, at github.com/utopia-ia/elffuss-code. It moved from github.com/KikoCis/elffuss-code on 23 October 2026; the old address redirects.
 
 <p align="center">
   <a href="https://code.elffuss.com">
@@ -310,7 +312,7 @@ prebuilt, verified vendor bundle). The agent talks to the tools with
 ## Shares a core with Elffuss
 
 `db.js`, `context.js` (ACE-lite context eviction), `settings.js`, the providers and the
-WebGL splash come from the sibling repo **[elffuss](https://github.com/KikoCis/elffuss)**.
+WebGL splash come from the sibling repo **[elffuss](https://github.com/utopia-ia/elffuss)**.
 Fix something there → sync it here.
 
 ## License
@@ -321,4 +323,4 @@ Fix something there → sync it here.
 
 El empaquetador de contexto (BM25 con IDF endógena contra la pregunta viva, sin heurísticas) está medido: recuerdo de hechos **15,1 % → 65,3 %** al mismo gasto de tokens, y **recuperar bien bate a no comprimir** (F1 28,09 contra 22,56 del contexto completo, con el 8 % de los tokens).
 
-Tablas completas, ablaciones y referencias en el **[core compartido](https://github.com/KikoCis/elffuss#cómo-se-mide-el-gestor-de-contexto)** · la historia con lo que salió mal en la **[bitácora](https://bitacora.utopiaia.com/posts/16-beaten-by-doing-nothing.html)**.
+Tablas completas, ablaciones y referencias en el **[core compartido](https://github.com/utopia-ia/elffuss#cómo-se-mide-el-gestor-de-contexto)** · la historia con lo que salió mal en la **[bitácora](https://bitacora.utopiaia.com/posts/16-beaten-by-doing-nothing.html)**.
