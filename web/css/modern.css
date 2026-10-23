@@ -1,0 +1,92 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/* Copyright (c) 2026 UtopiaIA */
+/* Elffuss look, 2026-10: the same brass, indigo and serif, on a lighter blue-slate ground, with a slow aurora behind the landing
+   and modern buttons. It loads after code.css and only re-sets colours, buttons and the aurora: no layout, no behaviour.
+   The editor itself keeps its own dark theme. */
+
+:root {
+  --bg: #303752;
+  --bg2: #39415f;
+  --bg3: #424b6c;
+  --line: #4b5578;
+  --fg: #f1eff7;
+  --muted: #b6bccb;
+  --accent: #d9b27a;
+  --accent2: #8272ff;
+  --ease: cubic-bezier(.16, 1, .3, 1);
+}
+
+/* A slow aurora behind the landing: teal, violet, magenta and brass. */
+#landing { background: radial-gradient(1100px 700px at 50% 32%, #4a3f86, #2c3350 72%); }
+#landing::before {
+  content: ""; position: absolute; inset: -25% -15%; z-index: 0; pointer-events: none; filter: blur(52px); will-change: transform;
+  background:
+    radial-gradient(38rem 26rem at 10% 6%, rgba(84, 220, 198, .20), transparent 70%),
+    radial-gradient(42rem 28rem at 88% 4%, rgba(130, 114, 255, .26), transparent 70%),
+    radial-gradient(34rem 24rem at 72% 64%, rgba(231, 121, 207, .12), transparent 70%),
+    radial-gradient(40rem 26rem at 16% 80%, rgba(200, 160, 106, .18), transparent 70%);
+  animation: aurora 48s ease-in-out infinite alternate;
+}
+@keyframes aurora {
+  from { transform: translate3d(-2%, -1%, 0) scale(1); }
+  to { transform: translate3d(3%, 2%, 0) scale(1.06); }
+}
+
+/* The chrome around the editor follows the slate ground; the editor keeps its own dark theme. */
+#activity, #tabs-bar, #conv-tabs, #term-head { background: #2a3048; }
+#landing .mini, .clone-or { color: var(--muted); }
+
+/* Small text and status colours that were tuned for near-black, lifted to keep 4.5:1 on the slate. */
+.clone-status.err, .tm-item.danger { color: #ffb3c6; }
+#activity button { color: #aab4cf; }
+.msg.tool-result summary::before { color: #8f99b8; }
+.msg.thinking .gen { color: #aeb6cc; }
+.msg.tool-result.err summary, .plan-card li.task-failed .task-title { color: #f2c46a; }
+.sk-msg.err { color: #ffc2d4; }
+.model-card span { color: #d6dcec; }
+
+/* Buttons: taller, softer corners, a light relief and a response when pressed. */
+#open-project, #resume-clone-btn, #composer button, .proposal-exec-btn, #dirty-dialog button, .cbtn, #landing .ghost, .ghost {
+  transition: transform .18s var(--ease), box-shadow .18s var(--ease), background-color .15s, border-color .15s, color .15s, filter .15s;
+}
+#open-project:active, #resume-clone-btn:active, #composer button:active, .proposal-exec-btn:active, #dirty-dialog button:active, .cbtn:active, #landing .ghost:active, .ghost:active {
+  transform: translateY(1px) scale(.985);
+}
+
+#open-project, #resume-clone-btn, #composer button, .proposal-exec-btn, #dirty-dialog button.dd-primary {
+  background: linear-gradient(180deg, #f0d2a4, #d3a96e);
+  color: #1b1408;
+  border: 1px solid rgba(255, 255, 255, .18);
+  font-weight: 600;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .55), 0 1px 2px rgba(0, 0, 0, .25), 0 10px 22px -10px rgba(230, 194, 148, .55);
+}
+#open-project { border-radius: 14px; }
+#open-project:hover, #resume-clone-btn:hover, #composer button:hover, .proposal-exec-btn:hover, #dirty-dialog button.dd-primary:hover {
+  background: linear-gradient(180deg, #f7dcb4, #dcb57b);
+  filter: none;
+  transform: translateY(-1px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .6), 0 1px 2px rgba(0, 0, 0, .25), 0 14px 28px -10px rgba(230, 194, 148, .7);
+}
+
+#landing .ghost, .ghost, #dirty-dialog button {
+  background: rgba(255, 255, 255, .06);
+  color: var(--fg);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .18);
+}
+#dirty-dialog button.dd-primary { border: 1px solid rgba(255, 255, 255, .18); }
+#landing .ghost:hover, .ghost:hover, #dirty-dialog button:not(.dd-primary):hover {
+  background: rgba(255, 255, 255, .12);
+  border-color: var(--accent);
+  color: var(--accent);
+  transform: translateY(-1px);
+}
+
+.cbtn { border-radius: 12px; }
+
+@media (prefers-reduced-motion: reduce) {
+  #landing::before { animation: none; }
+  #open-project:hover, #resume-clone-btn:hover, #composer button:hover, .proposal-exec-btn:hover, #landing .ghost:hover, .ghost:hover { transform: none; }
+  #open-project:active, #resume-clone-btn:active, #composer button:active, .proposal-exec-btn:active, #dirty-dialog button:active, .cbtn:active, #landing .ghost:active, .ghost:active { transform: none; }
+}
