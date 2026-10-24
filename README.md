@@ -1,29 +1,38 @@
-# 🧑‍💻 Elffuss Code — a VS Code-style IDE with an AI soul, 100% in your browser
+<div align="center">
 
-**Open a local folder and a full web IDE unfolds around it — real Monaco (the VS Code
-editor), a file tree, tabs — with an AI agent that reads, searches and edits your project
-for real. Everything runs in your browser: your code never leaves your machine.**
+<img src="assets/logo.svg" alt="" width="72">
 
-**[▶️ Live demo](https://code.elffuss.com)** ·
-**[✳️ Elffuss Claw (sibling project)](https://github.com/utopia-ia/elffuss-claw)** ·
-**[🧬 Shared core](https://github.com/utopia-ia/elffuss)** ·
-**License: Apache-2.0**
+# Elffuss Code
+
+**Put your computer to code with you.**
+
+A code agent that runs on your machine, inside the browser. Open a folder from your disk and the agent reads, searches and edits
+the project with you, in a real editor. Free, no account, no API key, no cloud AI.
+
+[![License](https://img.shields.io/badge/license-Apache--2.0-2b4acb?style=flat-square)](LICENSE)
+[![Editor](https://img.shields.io/badge/editor-Monaco-5b6169?style=flat-square)](#how-it-works)
+[![Runs in](https://img.shields.io/badge/runs%20in-your%20browser-2b4acb?style=flat-square)](https://code.elffuss.com)
+
+[Open Code](https://code.elffuss.com) · [Elffuss](https://elffuss.com) · [Claw](https://github.com/utopia-ia/elffuss-claw) · [Translator](https://github.com/utopia-ia/elffuss-translator) · [Copilot](https://github.com/utopia-ia/elffuss-copilot) · [Shared core](https://github.com/utopia-ia/elffuss)
+
+<a href="https://code.elffuss.com">
+  <img src="https://utopiaia.com/demos/elffuss/elffuss-code-demo.gif" alt="Code: the agent reads calc.py, finds a real bug and fixes it, all on the user's machine" width="820">
+</a>
+
+</div>
 
 > Elffuss Code now lives in the UtopiaIA organization on GitHub, at github.com/utopia-ia/elffuss-code. It moved from github.com/KikoCis/elffuss-code on 23 October 2026; the old address redirects.
 
-<p align="center">
-  <a href="https://code.elffuss.com">
-    <img src="https://utopiaia.com/demos/elffuss/elffuss-code-demo.gif" alt="Elffuss Code — the agent reads calc.py, finds a real bug and fixes it, all locally" width="820">
-  </a>
-</p>
-
-> In the demo above, a **small model running entirely in the browser** reads `calc.py`,
-> finds a real bug and fixes it with a minimal edit — using genuine tool-calling, not
-> autocomplete.
+> In the demo, a small model running entirely in the browser reads `calc.py`, finds a real bug and fixes it with a minimal
+> edit, using genuine tool calls, not autocomplete.
 
 ---
 
-## Why it's different
+**In this repository:** [why it is different](#why-it-is-different) · [how it works](#how-it-works) · [VS Code extensions](#vs-code-extensions-themes-grammars-snippets) · [run it](#run-locally) · [architecture](#architecture) · [shared core](#shares-a-core-with-elffuss)
+
+---
+
+## Why it is different
 
 - **Your code stays on your machine.** No upload, no account, no server round-trip. The
   folder is opened locally via the [File System Access API](https://developer.mozilla.org/docs/Web/API/File_System_Access_API).
@@ -35,7 +44,7 @@ for real. Everything runs in your browser: your code never leaves your machine.*
 
 ## How it works
 
-1. **Landing** → "📁 Open code folder" (File System Access — Chrome/Edge).
+1. **Landing** → "Open code folder" (File System Access — Chrome/Edge).
 2. **IDE** → file tree (left) · Monaco with tabs and `Ctrl+S` (center) · AI chat (right).
 3. The agent works **only inside your project**, through a small set of tools:
    - `code.tree` — list the project
@@ -43,8 +52,8 @@ for real. Everything runs in your browser: your code never leaves your machine.*
    - `code.search` — grep across the project, with line numbers
    - `code.edit` / `code.write` — make edits (the editor refreshes instantly)
 4. **Local brain by default:** Gemma-4 (E4B on desktop, E2B on mobile) via **LiteRT-LM on
-   WebGPU**, with an **ONNX / transformers.js** fallback (Qwen2.5-0.5B `q4`) when WebGPU
-   isn't available. External providers (OpenAI, Anthropic, Ollama) are **opt-in** in ⚙️ —
+   WebGPU**, with an **ONNX / transformers.js** fallback (Qwen3.5 0.8B) when WebGPU
+   isn't available. External providers (OpenAI, Anthropic, Ollama) are **opt-in** in *Settings* —
    keys stay in your browser and calls go straight to the provider.
 5. **Optional real terminal.** A tiny local **Bridge** (opt-in) lets the agent run real
    `node` / `npm` / `python` and read the output — still on your machine, nothing hosted.
@@ -319,8 +328,10 @@ Fix something there → sync it here.
 
 [Apache-2.0](LICENSE).
 
-## Gestión de contexto
+## Context management
 
-El empaquetador de contexto (BM25 con IDF endógena contra la pregunta viva, sin heurísticas) está medido: recuerdo de hechos **15,1 % → 65,3 %** al mismo gasto de tokens, y **recuperar bien bate a no comprimir** (F1 28,09 contra 22,56 del contexto completo, con el 8 % de los tokens).
-
-Tablas completas, ablaciones y referencias en el **[core compartido](https://github.com/utopia-ia/elffuss#cómo-se-mide-el-gestor-de-contexto)** · la historia con lo que salió mal en la **[bitácora](https://bitacora.utopiaia.com/posts/16-beaten-by-doing-nothing.html)**.
+The context packer (BM25 with an endogenous IDF against the live question, with no heuristics) is measured: fact recall goes from
+**15.1 % to 65.3 %** at the same token spend, and **retrieving well beats not compressing** (F1 28.09 against 22.56 for the full
+context, with 8 % of the tokens). Full tables, ablations and references are in the
+[shared core](https://github.com/utopia-ia/elffuss#what-was-measured-and-not-assumed); the story, with what went wrong, is in the
+[dev log](https://bitacora.utopiaia.com/posts/16-beaten-by-doing-nothing.html).
