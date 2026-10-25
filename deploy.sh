@@ -29,8 +29,10 @@ DEST=/var/www/elffuss-code.utopiaia.com
 # desaparecía del selector sin que nada avisara.
 #   Para desplegarlo a propósito:  ./deploy.sh --con-motor
 MOTOR=(--filter='P js/engine/**' --exclude='js/engine/**')
+CON_MOTOR=0
 for a in "$@"; do
   if [ "$a" = "--con-motor" ]; then
+    CON_MOTOR=1
     echo "▲ el motor propio (js/engine/) SE INCLUYE en este despliegue"
     # El protocolo de publicación pide BARRER antes de publicar. Hasta el
     # 2026-10-10 ese barrido se hacía a mano, o sea que un día no se hizo:
@@ -49,10 +51,15 @@ for a in "$@"; do
     fi
     node "$GUARDIA" --revisa web/js/engine || {
       echo "✗ el motor que ibas a servir no pasa el protocolo. No se ha subido nada." >&2; exit 1; }
-    # Se quita el --exclude pero se DEJA el filtro P: aunque lo estemos
-    # subiendo, el --delete no debe poder llevárselo. Y un array vacío con
+    # Se quitan el --exclude Y el filtro P. Con el P puesto, el --delete no
+    # podía borrar del servidor lo que ya no es del motor, y así se quedaron
+    # servidos tres módulos que ya nadie importaba, cuando la copia local ya no
+    # los tenía. Ahora es seguro:
+    # --revisa acaba de comprobar que web/js/engine es EXACTAMENTE el cierre del
+    # motor, así que el --delete solo puede quitar lo que sobra. El filtro R
+    # («risk») no protege nada y deja el array no vacío: un array vacío con
     # `set -u` revienta en bash 3.2.
-    MOTOR=(--filter='P js/engine/**')
+    MOTOR=(--filter='R js/engine/**')
   fi
 done
 
@@ -77,6 +84,20 @@ if node vendor/vscode-ext2/check-output.mjs --live web; then
 fi
 
 rsync -az --delete --filter='P blog/***' --filter='P __e4b.litertlm' --exclude='__e4b.litertlm' "${MOTOR[@]}" "${VENDOR[@]}" -e "ssh -i $KEY" web/ "$HOST:$DEST/"
+
+# Con el motor, comprobar lo que el SERVIDOR tiene de verdad: --revisa solo lee
+# la carpeta local, y lo que sobraba en el servidor no lo veía nadie. Tiene que
+# ser la misma lista que la copia local, entrada a entrada.
+if [ "$CON_MOTOR" = 1 ]; then
+  LOCAL=$(cd web/js/engine && find . -mindepth 1 | LC_ALL=C sort)
+  REMOTO=$(ssh -i "$KEY" "$HOST" "cd '$DEST/js/engine' && find . -mindepth 1 | LC_ALL=C sort")
+  if [ "$LOCAL" != "$REMOTO" ]; then
+    echo "✗ js/engine/ en el servidor no es la copia local entrada a entrada (< local, > servidor):" >&2
+    diff <(printf '%s\n' "$LOCAL") <(printf '%s\n' "$REMOTO") >&2 || true
+    exit 1
+  fi
+  echo "✔ js/engine/ en el servidor = la copia local ($(printf '%s\n' "$LOCAL" | wc -l | tr -d ' ') entradas)"
+fi
 
 # anti-caché: versionar assets del index con el commit y sellar el build
 V=$(git rev-parse --short HEAD 2>/dev/null || date +%s)
