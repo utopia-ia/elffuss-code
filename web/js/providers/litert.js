@@ -33,6 +33,12 @@ let dentro = null, respondio = false;
 // soltarTrasParada): si la llamada siguiente es esa misma conversación, se
 // rehace con eso dentro. null = no hay nada pendiente.
 let trasParada = null;
+// El último estado vivo (CONTEXTO AHORA) que ya va dentro de la conversación.
+// Llega en CADA llamada, y como aquí lo enviado se queda en el KV, mandarlo
+// siempre metía un volcado de estado por paso del bucle (en Code, el árbol y el
+// fichero abierto): contexto gastado en copias, y la conversación de verdad se
+// compactaba antes. Solo se manda cuando cambia. null = aún no lleva ninguno.
+let estadoDentro = null;
 
 // Muestreo. Por defecto VORAZ, que es como venía: mismo prompt, misma salida.
 // Eso hace que generar N veces cueste N y devuelva una sola respuesta distinta,
@@ -190,10 +196,12 @@ export async function unload() {
 export async function chat(history, system, onToken = () => {}, opciones = null) {
   if (!engine) throw new Error('Modelo no cargado');
   const signal = senalDe(opciones);
-  if (signal?.aborted) return '';   // parado antes de empezar: ni se toca la conversación
-  // Comparar solo la parte estática del prompt: el CONTEXTO AHORA va al final
-  // y cambia cada turno — recrear la conversación tiraría el KV-cache.
-  const sysKey = system.slice(0, 200);
+  if (signal?.aborted) return '';   // El prompt de sistema ENTERO. Antes se comparaban sus primeros 200
+  // caracteres, de cuando el CONTEXTO AHORA iba al final del sistema. Ya viaja
+  // como mensaje `efimero` (ver agent.js), y comparar solo la cabeza escondía lo
+  // que SÍ cambia al final: las skills. Instalar una a mitad de conversación no
+  // llegaba nunca al modelo.
+  const sysKey = system;
   // ¿Es ESTA la conversación que LiteRT tiene dentro? Todas las pestañas del
   // chat (y el cerebro CEO, Hard Work, el Lab…) comparten este proveedor, y
   // antes solo se miraba si el historial era más corto que lo ya enviado: el
@@ -237,7 +245,8 @@ export async function chat(history, system, onToken = () => {}, opciones = null)
   sentCount = desde;
   if (signal?.aborted) return '';   // parado mientras se preparaba: aún no se ha mandado nada
   // La conversación LiteRT mantiene su propio KV-cache: enviamos solo lo nuevo.
-  const fresh = history.slice(sentCount).filter(m => m.role === 'user');
+  const fresh = history.slice(sentCount)
+    .filter(m => m.role === 'user' && !(m.efimero && m.content === estadoDentro));
   const nuevos = fresh.length ? fresh : [history.at(-1)];
   let text = nuevos.map(m => m.content).join('\n');
 
@@ -312,6 +321,8 @@ export async function chat(history, system, onToken = () => {}, opciones = null)
   // un envío fallido dejaba el mensaje por enviado sin haber llegado nunca.
   sentCount = history.length;
   dentro = huellaDe(history); respondio = true;
+  const estado = nuevos.findLast(m => m.efimero);
+  if (estado) estadoDentro = estado.content;
   const despues = await tokensUsados();
   if (antes != null && despues != null && despues - antes > 64)
     charsPorToken = Math.min(2, Math.max(1.2, (text.length + out.length) / (despues - antes)));
@@ -389,6 +400,7 @@ function senalDe(x) {
 }
 
 function crearConversacion(system) {
+  estadoDentro = null;   // conversación nueva: no lleva ningún estado vivo
   return engine.createConversation({
     preface: { messages: [{ role: 'system', content: system }] },
     // Exprimir el navegador: no persistir los tokens de canal (tool-call/thinking)
@@ -442,7 +454,7 @@ const CABECERA_RETOMADA = 'CONVERSACIÓN HASTA AHORA (si no cabe entera, va lo m
 
 async function rehacerCompactada(history, hasta, system, nuevos, cabecera = CABECERA_COMPACTADA) {
   let bloque = '';
-  const previos = history.slice(0, hasta);
+  const previos = history.slice(0, hasta).map(aligerar);
   if (previos.length) {
     const { packHistoryAsync } = await import('../context.js');
     const { estimateTokens } = await import('../acer-core.js');
@@ -461,6 +473,30 @@ async function rehacerCompactada(history, hasta, system, nuevos, cabecera = CABE
   conversation = null; dentro = null;
   conversation = await crearConversacion(system + bloque);
   dentro = huellaDe(history.slice(0, hasta)); respondio = false;
+}
+
+// Una app creada son miles de tokens de HTML en el historial (y en Code, un
+// fichero escrito entero), y al compactar competían con la conversación por el
+// mismo presupuesto: tres o cuatro de esas y lo que el usuario había dicho (para
+// quién, qué le gusta, qué buscó) se quedaba fuera. Para el resumen basta con
+// saber QUÉ se hizo; el contenido está en la app o en el fichero.
+const PESADO = 1500;
+function aligerar(m) {
+  const c = m.content;
+  if (m.role !== 'assistant' || c.length < PESADO) return m;
+  const esApp = /<!doctype html|<html[\s>]/i.test(c);
+  const herramienta = c.match(/"tool"\s*:\s*"([\w.]+)"/)?.[1] || c.match(/<function\s+name=["']([\w.\-]+)["']/)?.[1];
+  if (!esApp && !herramienta) return m;
+  const arg = k => c.match(new RegExp(`"${k}"\\s*:\\s*"([^"]{1,80})"`))?.[1] || c.match(new RegExp(`<param\\s+name=["']${k}["']\\s*>\\s*([^<\\n]{1,80})`))?.[1];
+  const titulo = c.match(/<title>([^<]{1,60})<\/title>/i)?.[1];
+  const como = (arg('name') || arg('path') || (esApp ? titulo : null) || '').trim();
+  // Lo que el modelo dijera FUERA del bloque se conserva.
+  const fuera = c.replace(/```[\s\S]*?(```|$)/g, '').replace(/<function[\s\S]*?(<\/function>|$)/g, '')
+    .replace(/<!doctype html[\s\S]*$/i, '').trim().slice(0, 400);
+  const linea = esApp && (!herramienta || herramienta === 'app.create')
+    ? `[creé la app${como ? ` «${como}»` : ''}; su HTML está en la app]`
+    : `[llamé a ${herramienta}${como ? ` («${como}»)` : ''}; el contenido largo se omite]`;
+  return { ...m, content: linea + (fuera ? '\n' + fuera : '') };
 }
 
 function ajustarAlContexto(nuevos, maxCaracteres) {
