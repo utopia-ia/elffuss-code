@@ -85,6 +85,10 @@
 
 .cbtn { border-radius: 12px; }
 
+/* The Elffuss mark: in the IDE's header, and in the corner of the landing. «Code» stays outside the link. */
+.brand .elffuss-mark { font-size: 1rem; flex: none; }
+#landing .landing-mark { position: absolute; top: 16px; left: 16px; z-index: 2; font-size: 1.1rem; }
+
 @media (prefers-reduced-motion: reduce) {
   #landing::before { animation: none; }
   #open-project:hover, #resume-clone-btn:hover, #composer button:hover, .proposal-exec-btn:hover, #landing .ghost:hover, .ghost:hover { transform: none; }
