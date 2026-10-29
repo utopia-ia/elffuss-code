@@ -683,6 +683,18 @@ const minicpmCheck = (async () => {
   } catch { return (MINICPM_READY = false); }
 })();
 
+// LFM3-1.7B, el modelo por defecto del motor propio. Mismo patrón y mismo motivo.
+let LFM3_READY = false, LFM3_LABEL = 'LFM3 1.7B', LFM3_GB = 0;
+const lfm3Check = (async () => {
+  try {
+    const reg = await import('./engine/registro.js');
+    const m = reg.MODELS && reg.MODELS['lfm3-1.7b'];
+    if (m) { LFM3_LABEL = m.label || LFM3_LABEL; LFM3_GB = (m.bytes || 0) / 1e9; }
+    LFM3_READY = await reg.disponible('lfm3-1.7b');
+    return LFM3_READY;
+  } catch { return (LFM3_READY = false); }
+})();
+
 let ENGINE_READY = false, MODEL27_READY = false;
 let MODEL27_LABEL = 'Modelo grande';
 let MODEL27_GB = 0;
@@ -739,6 +751,9 @@ function modelOptionsLocales() {
   // NINGÚN modelo local, solo el modo básico. Se dice en el selector en vez de
   // dejarlo vacío sin explicación.
   if (realGPU) opts.push({ id: 'onnx:qwen3.5-0.8b', label: 'Qwen3.5-0.8B · WebGPU (~600 MB)' });
+  // LFM3 va PRIMERO entre los del motor: es su modelo por defecto. Comprobado
+  // contra llama.cpp token a token, y razona (lo pide el registro).
+  if (realGPU && ENGINE_READY && LFM3_READY) opts.push({ id: 'engine:lfm3-1.7b', label: `${LFM3_LABEL} · Elffuss Engine (${LFM3_GB.toFixed(1)} GB, se guarda) — razona` });
   if (realGPU && ENGINE_READY) opts.push({ id: 'engine:qwen35-0.8b', label: 'Qwen3.5-0.8B · Elffuss Engine (~800 MB)' });
   // El 27B se guarda tras la primera descarga (repartido en dos servidores y
   // troceado, porque el navegador corta un fichero suelto sobre 1,94 GB), así
@@ -952,8 +967,8 @@ async function preloadModel() {
   // Las sondas del motor y del modelo grande resuelven DESPUÉS de que se pinte
   // el selector, así que hay que repintarlo: sin esto la opción no aparece
   // hasta que algo más fuerce un refresco, y el usuario no la ve nunca.
-  const [hayMotor, hay27, hayMini] = await Promise.all([engineCheck, modelo27Check, minicpmCheck]);
-  if (hayMotor || hay27 || hayMini) rebuildSelect();
+  const [hayMotor, hay27, hayMini, hayLfm3] = await Promise.all([engineCheck, modelo27Check, minicpmCheck, lfm3Check]);
+  if (hayMotor || hay27 || hayMini || hayLfm3) rebuildSelect();
   const avail = new Set(modelOptions().map(o => o.id));
   const skipGemma = sessionStorage.getItem('elffusscode.skipGemma') === '1';
   const def = skipGemma ? (realGPU ? ONNX_LIGERO : null) : await pickLocalBrain();
