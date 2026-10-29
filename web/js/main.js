@@ -633,7 +633,9 @@ async function gpuCapacity() {
   try {
     const a = await navigator.gpu.requestAdapter();
     if (!a) return { gpu: false, maxBuf: 0, mem };
-    return { gpu: true, maxBuf: a.limits?.maxBufferSize || 0, mem };
+    // shader-f16: el motor propio guarda la caché de atención en media precisión
+    // y sin esa característica falla al compilar, ya con el modelo descargado.
+    return { gpu: true, maxBuf: a.limits?.maxBufferSize || 0, mem, f16: !!a.features?.has('shader-f16') };
   } catch { return { gpu: false, maxBuf: 0, mem }; }
 }
 
@@ -645,11 +647,15 @@ async function gpuCapacity() {
 // sabía enseñar.
 const ONNX_LIGERO = 'onnx:qwen3.5-0.8b';
 
-// Auto-selección: el modelo MÁS GRANDE que entre en esta máquina. Gemma por
-// LiteRT si la GPU aguanta sus buffers; si no, un ONNX pequeño (WebGPU o wasm).
+// Auto-selección. En escritorio, LFM3-1.7B por el motor propio (desde el
+// 29-oct-2026): baja menos que Gemma E4B y genera más rápido en el navegador; en
+// el banco agéntico queda algo por debajo de E4B. Quien llama ya ha esperado las
+// sondas del motor y del modelo. Sin ellas, o sin shader-f16: Gemma por LiteRT si
+// la GPU aguanta sus buffers; si no, un ONNX pequeño.
 async function pickLocalBrain() {
   const c = await gpuCapacity();
   if (c.gpu && !isMobile()) {
+    if (c.f16 && ENGINE_READY && LFM3_READY) return 'engine:lfm3-1.7b';   // ~1.8 GB
     if (c.maxBuf >= 2 ** 31 && c.mem >= 8) return 'litert:gemma-e4b';   // ~2.8 GB
     if (c.maxBuf >= 2 ** 30 && c.mem >= 6) return 'litert:gemma-e2b';   // ~2 GB
   }
@@ -729,7 +735,11 @@ const modelo27Check = (async () => {
 // nombre que se queda viejo.
 function modelOptionsLocales() {
   const opts = [];
-  if (realGPU) opts.push({ id: 'litert:gemma-e4b', label: 'Gemma-4 E4B · LiteRT-LM (~2.8 GB) ★' });
+  // LFM3 va PRIMERO y lleva la estrella: es el de arranque en escritorio
+  // (pickLocalBrain). Comprobado contra llama.cpp token a token, y razona (lo
+  // pide el registro).
+  if (realGPU && ENGINE_READY && LFM3_READY) opts.push({ id: 'engine:lfm3-1.7b', label: `${LFM3_LABEL} · Elffuss Engine (${LFM3_GB.toFixed(1)} GB, se guarda) ★ — razona` });
+  if (realGPU) opts.push({ id: 'litert:gemma-e4b', label: 'Gemma-4 E4B · LiteRT-LM (~2.8 GB)' });
   if (realGPU) opts.push({ id: 'litert:gemma-e2b', label: 'Gemma-4 E2B · LiteRT-LM (~2 GB)' });
   // `onnx` a secas era Elffuss LM y se ha quitado. Ojo con el patrón: ESTE era
   // el TERCER sitio donde el mismo modelo estaba declarado a mano (el registro
@@ -751,9 +761,6 @@ function modelOptionsLocales() {
   // NINGÚN modelo local, solo el modo básico. Se dice en el selector en vez de
   // dejarlo vacío sin explicación.
   if (realGPU) opts.push({ id: 'onnx:qwen3.5-0.8b', label: 'Qwen3.5-0.8B · WebGPU (~600 MB)' });
-  // LFM3 va PRIMERO entre los del motor: es su modelo por defecto. Comprobado
-  // contra llama.cpp token a token, y razona (lo pide el registro).
-  if (realGPU && ENGINE_READY && LFM3_READY) opts.push({ id: 'engine:lfm3-1.7b', label: `${LFM3_LABEL} · Elffuss Engine (${LFM3_GB.toFixed(1)} GB, se guarda) — razona` });
   if (realGPU && ENGINE_READY) opts.push({ id: 'engine:qwen35-0.8b', label: 'Qwen3.5-0.8B · Elffuss Engine (~800 MB)' });
   // El 27B se guarda tras la primera descarga (repartido en dos servidores y
   // troceado, porque el navegador corta un fichero suelto sobre 1,94 GB), así
@@ -851,6 +858,10 @@ function pintaDot(estado, id) {
   const txt = id === 'rules' ? t('modelDotBasic') : t('modelDot', { name: nombre, state: t('modelState_' + estado) });
   d.title = txt;
   d.setAttribute('aria-label', txt);
+  // El mismo nombre, corto y a la vista (hasta el primer « · »). El lector de
+  // pantalla ya lo oye en el punto: la etiqueta es solo para la vista.
+  const n = $('model-name');
+  if (n) { n.textContent = id === 'rules' ? t('setModelRulesName') : nombre.split(' · ')[0]; n.title = txt; }
 }
 
 function errorHumano(e) {
@@ -863,6 +874,7 @@ function errorHumano(e) {
 }
 
 let loadingId = null;
+let modeloPendiente = null;      // elegido mientras otro cargaba (ver changeModel)
 // Lo pone renderSettings: repinta las tarjetas de modelo del panel abierto.
 let repintaTarjetasModelo = () => {};
 // Solo el motor propio mide tok/s: con cualquier otro cerebro el chip ⚡ se
@@ -879,6 +891,16 @@ async function changeModel(id) {
     return true;
   }
   if (loadingId === id || activeModel === id) return true; // un solo modelo, una sola carga
+  // Otro modelo a media carga: se apunta y se carga al terminar ese. Dos cargas a
+  // la vez son dos modelos de gigas compitiendo por la memoria. Pasa al elegir
+  // otro en Ajustes mientras todavía baja el de arranque.
+  if (loadingId) {
+    modeloPendiente = id;
+    guardaPref('elffusscode.model', id);
+    showModelProgress(t('modelQueued'));
+    rebuildSelect();
+    return true;
+  }
   loadingId = id;
   pintaDot('loading', id);
   showModelProgress(t("stModelLoadingAI"), 4);
@@ -950,6 +972,9 @@ async function changeModel(id) {
   } finally {
     loadingId = null;
     repintaTarjetasModelo();       // Ajustes abierto: la activa y el «cargando…» al día
+    const p = modeloPendiente;
+    modeloPendiente = null;
+    if (p && p !== activeModel) queueMicrotask(() => changeModel(p));
   }
 }
 let _fellBack = false;
@@ -961,6 +986,16 @@ let _fellBack = false;
 // healed falla (p. ej. «HF_Tokenizer_Zlib not supported» del runtime LiteRT),
 // cae solo a LFM2.5 en vez de dejar al usuario sin cerebro.
 async function preloadModel() {
+  // 29-oct-2026: LFM3 pasa a ser el de arranque. La preferencia se guarda con
+  // cada carga, no solo al elegir, así que casi todo el que tiene guardado Gemma
+  // E4B lo tiene porque era el de arranque, no porque lo eligiera. Se le trata
+  // UNA vez como si no hubiera elegido; si vuelve a escoger Gemma, se respeta.
+  try {
+    if (localStorage.getItem('elffusscode.arranque') !== 'lfm3') {
+      if (localStorage.getItem('elffusscode.model') === 'litert:gemma-e4b') localStorage.removeItem('elffusscode.model');
+      localStorage.setItem('elffusscode.arranque', 'lfm3');
+    }
+  } catch { /* almacenamiento bloqueado: se queda lo que hubiera */ }
   const saved = localStorage.getItem('elffusscode.model');
   if (saved === 'rules') return;
   await realGPUCheck; // que modelOptions()/pickLocalBrain() vean el adaptador real, no solo la API
@@ -1147,6 +1182,7 @@ function renderSettings() {
   // añada el siguiente modelo. El texto de debajo sigue siendo a medida cuando
   // lo hay; si no, se saca de la propia etiqueta.
   const SUBS = {
+    'engine:lfm3-1.7b': t('setModelLfm3Sub'),
     'litert:gemma-e4b': t("setModelE4bSub"),
     'litert:gemma-e2b': t("setModelE2bSub"),
     [ONNX_LIGERO]: t("setModelOnnxSub"),
@@ -1487,6 +1523,9 @@ function renderSettings() {
   skBtn.onclick = openSkillsPanel;
   box.appendChild(skBtn);
 }
+// Ficha de los modelos del motor propio que la tienen pública (la licencia de
+// LFM3 pide que quien lo use pueda llegar a ella).
+const FICHA_MOTOR = { 'engine:lfm3-1.7b': 'https://huggingface.co/LiquidAI/LFM3-1.7B' };
 async function pintaFichasModelo(nodo, locales) {
   let lt = null, mc = null;
   try { [lt, mc] = await Promise.all([import('./providers/litert.js'), import('./model-config.js')]); } catch { return; }
@@ -1494,6 +1533,7 @@ async function pintaFichasModelo(nodo, locales) {
   for (const m of locales) {
     let url = null;
     if (m.id.startsWith('litert:')) { const u = lt.MODELS?.[m.id.slice(7)]?.url; if (u) url = u.split('/resolve/')[0]; }
+    else if (FICHA_MOTOR[m.id]) url = FICHA_MOTOR[m.id];
     else if (m.id.startsWith('onnx:')) { const o = mc.ONNX_MODELS?.[m.id.slice(5)]; if (o?.id && !o.selfHosted) url = 'https://huggingface.co/' + o.id; }
     if (url) enlaces.push([m.name, url]);
   }
@@ -1834,10 +1874,12 @@ function anunciarEnvio(texto) {
 $('model-select').addEventListener('change', e => changeModel(e.target.value));
 // El foco va a la tarjeta del modelo ACTIVO (un selector con coma devolvía la
 // primera tarjeta en el orden del documento, no la activa).
-$('model-dot').addEventListener('click', () => {
+const abreCerebro = () => {
   renderSettings();
   requestAnimationFrame(() => { const panel = $('settings-panel'); (panel.querySelector('.model-card.active') || panel.querySelector('.model-card'))?.focus(); });
-});
+};
+$('model-dot').addEventListener('click', abreCerebro);
+$('model-name').addEventListener('click', abreCerebro);
 pintaDot('off', 'rules');
 // móvil: conmutar chat ↔ editor
 // ☰ (solo en el móvil): cajón con el árbol de ficheros y la barra de
@@ -2379,7 +2421,7 @@ document.addEventListener('pointerdown', e => {
   // Los botones que abren o cierran el panel (y el explorador y el cajón del
   // móvil, que conviven con él) no cuentan como «fuera»: si no, el clic lo
   // cerraba y su propio manejador lo volvía a abrir.
-  if (p.contains(e.target) || e.target.closest('#btn-settings, #act-settings, #act-skills, #act-ext, #act-files, #btn-drawer, #drawer-scrim, #model-dot, #ext-themepick')) return;
+  if (p.contains(e.target) || e.target.closest('#btn-settings, #act-settings, #act-skills, #act-ext, #act-files, #btn-drawer, #drawer-scrim, #model-dot, #model-name, #ext-themepick')) return;
   p.hidden = true;
   volverDeAjustes = null;
 }, true);
