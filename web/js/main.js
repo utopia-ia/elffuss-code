@@ -1200,7 +1200,11 @@ function renderSettings() {
   // explicación es una pregunta de soporte. Se dice POR QUÉ, en palabras de
   // persona, y con la salida a mano (otro navegador, o un modelo externo).
   if (!realGPU) {
-    const aviso = el('div', 'sk-nota', t('setBrainNeedsGpu'));   // la clase que ya existe, no una nueva
+    // Con la API presente y sin adaptador no es «este navegador»: es Chrome con la
+    // GPU bloqueada en este momento (tras cuelgues del proceso de la GPU, o con una
+    // actualización pendiente). Decir «prueba otro navegador» mandaba a quien ya
+    // está en el correcto a buscar otro.
+    const aviso = el('div', 'sk-nota', t(navigator.gpu ? 'setBrainGpuBlocked' : 'setBrainNeedsGpu'));   // la clase que ya existe, no una nueva
     aviso.setAttribute('role', 'note');
     box.appendChild(aviso);
   }
