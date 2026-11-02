@@ -77,6 +77,9 @@ db.onWrite((store, key) => {
 const guardaPref = (k, v) => { try { localStorage.setItem(k, v); } catch { /* lleno o bloqueado */ } workspace.touch('prefs'); };
 
 import * as telemetry from './telemetry.js';
+import { ofrecerInstalar } from './instalar.js';
+
+ofrecerInstalar();   // en el móvil, lo primero: instalarla como app
 
 const $ = id => document.getElementById(id);
 // Atajos tal y como se pulsan en ESTA máquina: en un Mac el editor guarda con
@@ -659,6 +662,9 @@ async function pickLocalBrain() {
     if (c.maxBuf >= 2 ** 31 && c.mem >= 8) return 'litert:gemma-e4b';   // ~2.8 GB
     if (c.maxBuf >= 2 ** 30 && c.mem >= 6) return 'litert:gemma-e2b';   // ~2 GB
   }
+  // Móvil, desde el 2-nov-2026: LFM3 en Q4_0 por el motor propio (1,05 GB,
+  // contexto 8k), que sí cabe en la pestaña de un teléfono. Sin shader-f16, el E2B.
+  if (c.gpu && isMobile() && c.f16 && ENGINE_READY && LFM3Q4_READY) return 'engine:lfm3-1.7b-q4';
   if (c.gpu && isMobile()) return 'litert:gemma-e2b';
   // Sin GPU no hay modelo local, y eso es un NULL explícito. Antes devolvía el
   // ligero, que es justo el que NO puede correr sin WebGPU: la rama sin GPU
@@ -690,15 +696,20 @@ const minicpmCheck = (async () => {
 })();
 
 // LFM3-1.7B, el modelo por defecto del motor propio. Mismo patrón y mismo motivo.
+// Su Q4_0 es el del MÓVIL: el Q8_0 no cabe en la pestaña de un teléfono y este sí.
 let LFM3_READY = false, LFM3_LABEL = 'LFM3 1.7B', LFM3_GB = 0;
+let LFM3Q4_READY = false, LFM3Q4_LABEL = 'LFM3 1.7B · Q4_0', LFM3Q4_GB = 0;
 const lfm3Check = (async () => {
   try {
     const reg = await import('./engine/registro.js');
     const m = reg.MODELS && reg.MODELS['lfm3-1.7b'];
     if (m) { LFM3_LABEL = m.label || LFM3_LABEL; LFM3_GB = (m.bytes || 0) / 1e9; }
-    LFM3_READY = await reg.disponible('lfm3-1.7b');
-    return LFM3_READY;
-  } catch { return (LFM3_READY = false); }
+    const q4 = reg.MODELS && reg.MODELS['lfm3-1.7b-q4'];
+    if (q4) { LFM3Q4_LABEL = q4.label || LFM3Q4_LABEL; LFM3Q4_GB = (q4.bytes || 0) / 1e9; }
+    [LFM3_READY, LFM3Q4_READY] = await Promise.all([
+      reg.disponible('lfm3-1.7b'), q4 ? reg.disponible('lfm3-1.7b-q4') : false]);
+    return LFM3_READY || LFM3Q4_READY;
+  } catch { return (LFM3_READY = LFM3Q4_READY = false); }
 })();
 
 let ENGINE_READY = false, MODEL27_READY = false;
@@ -739,6 +750,7 @@ function modelOptionsLocales() {
   // (pickLocalBrain). Comprobado contra llama.cpp token a token, y razona (lo
   // pide el registro).
   if (realGPU && ENGINE_READY && LFM3_READY) opts.push({ id: 'engine:lfm3-1.7b', label: `${LFM3_LABEL} · Elffuss Engine (${LFM3_GB.toFixed(1)} GB, se guarda) ★ — razona` });
+  if (realGPU && ENGINE_READY && LFM3Q4_READY) opts.push({ id: 'engine:lfm3-1.7b-q4', label: `${LFM3Q4_LABEL} · Elffuss Engine (${LFM3Q4_GB.toFixed(1)} GB, se guarda) — razona, para móvil` });
   if (realGPU) opts.push({ id: 'litert:gemma-e4b', label: 'Gemma-4 E4B · LiteRT-LM (~2.8 GB)' });
   if (realGPU) opts.push({ id: 'litert:gemma-e2b', label: 'Gemma-4 E2B · LiteRT-LM (~2 GB)' });
   // `onnx` a secas era Elffuss LM y se ha quitado. Ojo con el patrón: ESTE era
@@ -995,6 +1007,13 @@ async function preloadModel() {
       if (localStorage.getItem('elffusscode.model') === 'litert:gemma-e4b') localStorage.removeItem('elffusscode.model');
       localStorage.setItem('elffusscode.arranque', 'lfm3');
     }
+    // 2-nov-2026, lo mismo en el móvil: quien tenía guardado el E2B o el ligero
+    // lo tenía por ser el de arranque. Una vez, pasa al Q4_0 del motor.
+    if (isMobile() && localStorage.getItem('elffusscode.arranque.movil') !== 'lfm3-q4') {
+      const s = localStorage.getItem('elffusscode.model');
+      if (s === 'litert:gemma-e2b' || s === ONNX_LIGERO) localStorage.removeItem('elffusscode.model');
+      localStorage.setItem('elffusscode.arranque.movil', 'lfm3-q4');
+    }
   } catch { /* almacenamiento bloqueado: se queda lo que hubiera */ }
   const saved = localStorage.getItem('elffusscode.model');
   if (saved === 'rules') return;
@@ -1015,7 +1034,9 @@ async function preloadModel() {
   // pidiera nada. Son casi dos gigas de datos de alguien que solo entró a
   // mirar, y encima el navegador de móvil mata la pestaña bastante antes de
   // sostener ese modelo, así que se gastaban para nada. Se avisa y se espera.
-  if (isMobile() && localStorage.getItem('elffusscode.movil.ok') !== '1') {
+  // Con el Q4_0 del motor no hay puerta: es el que cabe en el teléfono y se
+  // carga por defecto (2-nov-2026).
+  if (isMobile() && chain[0] !== 'engine:lfm3-1.7b-q4' && localStorage.getItem('elffusscode.movil.ok') !== '1') {
     avisoMovil('~1,9 GB', () => {
       (async () => { for (const id of chain) if (await changeModel(id)) return; })();
     });
