@@ -5,7 +5,7 @@ import * as codeTools from './tools/code.js';
 import * as db from './db.js';
 import * as settings from './settings.js';
 import { initEditor, refreshTree, openFile, gotoLine, triggerEditor, hasEditor, saveActive, activeFile, focusEditor, loadExt } from './ide.js';
-import { ACTIVITY, UI } from './icons.js';
+import { ACTIVITY, UI, brainIcon, dictIcon, gpuIcon } from './icons.js';
 import { renderMarkdown } from './md.js';
 import * as skills from './skills.js';
 import * as terminal from './terminal.js';
@@ -867,13 +867,25 @@ function pintaDot(estado, id) {
   if (!d) return;
   d.className = 'dot ' + (estado === 'error' ? 'off' : estado);
   const nombre = (modelOptions().find(o => o.id === id)?.label || id || '').replace(/\s*★$/, '');
-  const txt = id === 'rules' ? t('modelDotBasic') : t('modelDot', { name: nombre, state: t('modelState_' + estado) });
+  // Los modelos locales corren SIEMPRE en la GPU (el motor, LiteRT y el ONNX
+  // ligero la exigen): se dice a la vista, no solo en el título.
+  const enGpu = /^(engine|litert|onnx|webllm)[:]?/.test(id || '');
+  const txt = (id === 'rules' ? t('modelDotBasic') : t('modelDot', { name: nombre, state: t('modelState_' + estado) }))
+    + (enGpu ? ' · ' + t('modelWhereGpu') : '');
   d.title = txt;
   d.setAttribute('aria-label', txt);
   // El mismo nombre, corto y a la vista (hasta el primer « · »). El lector de
   // pantalla ya lo oye en el punto: la etiqueta es solo para la vista.
   const n = $('model-name');
-  if (n) { n.textContent = id === 'rules' ? t('setModelRulesName') : nombre.split(' · ')[0]; n.title = txt; }
+  if (n) {
+    const corto = el('span', 'mn-name', id === 'rules' ? t('setModelRulesName') : nombre.split(' · ')[0]);
+    n.replaceChildren(corto);
+    if (enGpu) {
+      n.insertAdjacentHTML('afterbegin', gpuIcon(14));
+      n.appendChild(el('span', 'mn-where', '· ' + t('modelWhereGpu')));
+    }
+    n.title = txt;
+  }
 }
 
 function errorHumano(e) {
@@ -2357,7 +2369,7 @@ window.addEventListener('resize', () => terminal.refit());
 
 // iconos VS Code (sin emojis) en cabecera, composer y flip
 $('btn-history').innerHTML = UI.history;
-$('btn-settings').innerHTML = UI.gear;
+$('btn-settings').innerHTML = brainIcon(17);
 $('btn-send').innerHTML = UI.send;
 $('btn-plus').innerHTML = UI.add;
 $('btn-slash').innerHTML = UI.slash;
@@ -2369,7 +2381,7 @@ $('act-files').innerHTML = ACTIVITY.files;
 // La búsqueda fija de la cabecera (sustituye a la lupa de la barra lateral).
 $('top-search').querySelector('.ts-ico').innerHTML = ACTIVITY.search;
 $('top-search').querySelector('.ts-kbd').textContent = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? '⌘P' : 'Ctrl+P';
-$('act-settings').innerHTML = ACTIVITY.gear;
+$('act-settings').innerHTML = brainIcon(22);
 $('act-files').addEventListener('click', () => {
   document.body.classList.toggle('hide-tree');
   pintaActividad();
@@ -3538,7 +3550,8 @@ function mountDiskChip() {
       return;
     }
     chip.hidden = false;
-    chip.textContent = '💾 ' + tamano(m.total);
+    chip.innerHTML = dictIcon(14);
+    chip.appendChild(el('span', null, tamano(m.total)));
     chip.title = t('diskChipTitle', { size: tamano(m.total), quota: quota ? t('diskChipQuota', { quota: tamano(quota) }) : '' })
       + (m.sharedOk ? '' : t('setSharedUnknown'));
   }

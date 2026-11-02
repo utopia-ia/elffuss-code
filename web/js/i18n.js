@@ -206,7 +206,7 @@ const L = {
     setPermNote: "Esto controla solo la escritura de ficheros (code.write / code.edit): desmárcalo si prefieres revisar cada cambio antes de aplicarlo. Los comandos del terminal (terminal.run) se ejecutan siempre sin preguntar.",
     provToggle: "Activar {name}", setModelLoadingCard: "cargando…",
     provDocs: 'documentación ↗', provDocsFor: 'Documentación de la API de {name}',
-    modelDot: "Modelo: {name} · {state} — clic para cambiarlo", modelDotBasic: "Modo básico, sin modelo de IA — clic para elegir uno",
+    modelDot: "Modelo: {name} · {state} — clic para cambiarlo", modelWhereGpu: "en tu GPU", modelDotBasic: "Modo básico, sin modelo de IA — clic para elegir uno",
     modelState_off: "sin cargar", modelState_loading: "cargando…", modelState_on: "listo", modelState_error: "no se pudo cargar",
     // teclado, menús y pestañas
     menubarLabel: "Menú", menu_file: "Archivo", menu_edit: "Editar", menu_view: "Ver", menu_git: "Git",
@@ -459,7 +459,7 @@ const L = {
     setPermNote: "This only controls writing files (code.write / code.edit): untick it if you prefer to review each change before it is applied. Terminal commands (terminal.run) always run without asking.",
     provToggle: "Turn on {name}", setModelLoadingCard: "loading…",
     provDocs: 'docs ↗', provDocsFor: '{name} API documentation',
-    modelDot: "Model: {name} · {state} — click to change it", modelDotBasic: "Basic mode, no AI model — click to pick one",
+    modelDot: "Model: {name} · {state} — click to change it", modelWhereGpu: "on your GPU", modelDotBasic: "Basic mode, no AI model — click to pick one",
     modelState_off: "not loaded", modelState_loading: "loading…", modelState_on: "ready", modelState_error: "couldn't load",
     // keyboard, menus and tabs
     menubarLabel: "Menu", menu_file: "File", menu_edit: "Edit", menu_view: "View", menu_git: "Git",

@@ -620,9 +620,17 @@ header { position: relative; }
 .chip svg { width: 12px; height: 12px; }
 /* El nombre del modelo junto a su punto: el punto solo, de 9 px, no se
    encontraba, y es la puerta para cambiar de modelo (Ajustes → Cerebro). */
-.model-name { max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
+.model-name { max-width: 260px; overflow: hidden; display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
 .model-name:empty { display: none; }
-@media (max-width: 820px) { .model-name { display: none; } }
+.model-name svg { flex: none; }
+.model-name .mn-name { overflow: hidden; text-overflow: ellipsis; }
+.model-name .mn-where { color: var(--muted); flex: none; }
+#disk-chip { display: inline-flex; align-items: center; gap: 5px; }
+#disk-chip[hidden] { display: none; }
+#disk-chip svg, #btn-settings svg { flex: none; }
+/* En el teléfono no cabe el nombre: queda el chip de la GPU, que sigue diciendo
+   dónde corre el modelo (el nombre entero está en el punto de al lado). */
+@media (max-width: 820px) { .model-name .mn-name, .model-name .mn-where { display: none; } }
 
 /* command palette */
 #palette { position: fixed; top: 52px; left: 50%; transform: translateX(-50%); z-index: 130; width: min(640px, 92vw); background: var(--bg3); border: 1px solid var(--accent2); border-radius: 10px; box-shadow: 0 20px 60px rgba(0,0,0,.6); overflow: hidden; }

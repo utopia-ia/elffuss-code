@@ -68,8 +68,8 @@ await p.goto(BASE + '/?test-opfs', { waitUntil: 'domcontentloaded' });
 await p.waitForFunction(() => window.elffussClaw?.conv?.getActive?.() && !document.getElementById('disk-chip').hidden, null, { timeout: 20000 }).catch(() => {});
 
 // 3 · el chip cuenta solo los modelos
-const chip = await p.evaluate(() => ({ txt: document.getElementById('disk-chip').textContent, title: document.getElementById('disk-chip').title }));
-ok('3 · el chip cuenta solo los modelos (3 MB), no los 3 MB de datos del proyecto', /💾 3 MB/.test(chip.txt), JSON.stringify(chip));
+const chip = await p.evaluate(() => ({ txt: document.getElementById('disk-chip').textContent.trim(), icono: !!document.querySelector('#disk-chip svg'), title: document.getElementById('disk-chip').title }));
+ok('3 · el chip cuenta solo los modelos (3 MB), no los 3 MB de datos del proyecto', chip.txt === '3 MB' && chip.icono, JSON.stringify(chip));
 await conTeclado('#disk-chip');
 await p.waitForFunction(() => /Liberados/.test(document.getElementById('statusbar').textContent), null, { timeout: 10000 }).catch(() => {});
 await p.waitForFunction(() => document.getElementById('disk-chip').hidden, null, { timeout: 5000 }).catch(() => {});
