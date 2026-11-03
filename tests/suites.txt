@@ -64,6 +64,9 @@ litert-stop
 litertcache
 longsession
 md
+memoria-v2
+memoria-v2-config
+memoria-v2-unidad
 messages-ux
 mind
 mind-consent
