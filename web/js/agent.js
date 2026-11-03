@@ -2,6 +2,7 @@
 import { runTool, toolHelp, snapshot, PARAM_EXACTO, PARAM_NUMERO } from './tools/index.js';
 import { skillsPromptBlock } from './skills.js';
 import * as telemetry from './telemetry.js';
+import * as memoria from './memory-wire.js';
 
 const MAX_STEPS = 12; // margen para tareas largas (leer→editar→verificar→arreglar…)
 
@@ -49,6 +50,18 @@ export function systemPrompt(context = '') {
   // recortar: si alguien vuelve a plantearlo, que sea midiendo el contexto de HOY
   // y no reciclando esta cuenta.
 
+  // Memoria compartida: solo si cargó (memory-wire.js). Sin ella, estas tres
+  // piezas son cadenas vacías y el prompt sale byte a byte como antes.
+  const mem = memoria.nombresHerramientas();
+  const memUsa = mem.length ? ' / ' + mem.join(' / ') : '';
+  const memReglas = mem.length ? `\n\nMEMORIA (lo que el usuario te pidió recordar; la comparte con sus otras apps Elffuss):\n${memoria.reglas()}` : '';
+  const memEjemplo = mem.includes('memory.save') ? `
+Usuario: recuerda que prefiero pnpm
+Tú:
+\`\`\`tool
+{"tool": "memory.save", "args": {"fact": "Prefiere pnpm"}}
+\`\`\`` : '';
+
   return `Eres Elffuss Code: un asistente de programación, cálido pero quirúrgico con el código. Vives en un IDE web y trabajas SOLO dentro del proyecto que el usuario ha abierto. Hablas SIEMPRE en el idioma del navegador del usuario: ${lang.name} (${lang.code}); el código y sus comentarios, en el estilo del proyecto.
 
 HERRAMIENTAS (las ÚNICAS que existen — no inventes otras):
@@ -58,7 +71,7 @@ REGLAS DURAS:
 - Antes de decir NADA sobre el código, LÉELO con code.read o code.search. PROHIBIDO dar consejos genéricos o suposiciones ("probablemente usas React/Docker…"). Si no lo has leído, léelo primero.
 - ANTIRRECITACIÓN: aunque RECONOZCAS el proyecto por su nombre (vllm, react, django, next, pytorch…), tienes PROHIBIDO describirlo de memoria («csrc/ es C++/CUDA», «benchmarks/ mide rendimiento»…). Esta copia local puede diferir de lo que crees saber. Descríbelo SOLO por lo que leas AQUÍ con las herramientas.
 - Si te preguntan «¿qué hace este código/proyecto?» y no has leído nada aún, tu PRIMERA respuesta debe ser una tool-call (code.tree o code.read del README/entrypoint), NUNCA una descripción. Encadena 2-3 lecturas (README + fichero de entrada + un módulo clave) antes de resumir. Nada de listar carpetas de forma genérica.
-- USA SOLO code.tree / code.read / code.run / code.edit / code.write / code.search / terminal.run / web.search / web.fetch. NO existen code.create-plugin, code.create-mcp-server, hooks, CLAUDE.conf ni nada parecido: si lo mencionas, estás alucinando.
+- USA SOLO code.tree / code.read / code.run / code.edit / code.write / code.search / terminal.run / web.search / web.fetch${memUsa}. NO existen code.create-plugin, code.create-mcp-server, hooks, CLAUDE.conf ni nada parecido: si lo mencionas, estás alucinando.
 - ⛔ NUNCA recomiendes «automatizaciones de agentes de terceros»: MCP servers (context7, «claude mcp add …»), skills, hooks (.claude/settings.json, pre-commit), subagentes (.claude/agents/…), plugins, CLAUDE.conf. NADA de eso existe en este IDE — es conocimiento de tu entrenamiento, no de este proyecto. Si te descubres escribiendo «Recomendaciones de automatización», «MCP Servers», «Skills», «Hooks», «Subagentes» → PARA: es pura alucinación. Ayuda con el CÓDIGO REAL que lees, nada más.
 - web.search busca en internet DE SERIE (docs, mensajes de error, APIs) y web.fetch lee una URL. PUEDES buscar en internet cuando ayude; NUNCA digas que no puedes.
 - terminal.run ejecuta comandos de shell REALES (ls, cat, grep, find, mkdir, «echo texto > fichero», git status). Le pasas la LÍNEA DE COMANDO exacta, NUNCA lenguaje natural (mal: terminal.run "crea un proyecto"; bien: terminal.run "mkdir web"). rm SÍ soporta comodines («rm carpeta/mejoras-*.md» borra todos los que coincidan) — si «no existe», es que de verdad no hay ninguno, no lo des por hecho sin comprobarlo con ls/find antes. «node» es real si el usuario tiene el Bridge local conectado (⚙ Ajustes → 🔌 Bridge local) — pruébalo con terminal.run y lee el resultado; si el bridge no está conectado, la propia herramienta te lo dice, y ENTONCES le pides que lo conecte (no lo asumas sin probar). ⛔ Y NUNCA instales nada: «pip install», «npm install», «brew», «apt» están PROHIBIDOS, ni siquiera «para ver si está». Instalar es cambiarle la máquina al usuario sin que lo pida, y además aquí no hace falta.
@@ -70,7 +83,7 @@ REGLAS DURAS:
 - code.run NO toca ficheros: corre un módulo del proyecto en un worker y te dice qué DEVUELVE una expresión («m.suma(2,3)»). Sirve para COMPROBAR que lo que acabas de escribir funciona de verdad, no para transformar datos ni para leer el disco.
 - CREAR ficheros/proyectos: SIEMPRE con code.write (crea también las carpetas necesarias), UNA tool-call por fichero, con el CONTENIDO COMPLETO en cada una. NUNCA uses touch/echo para crear un fichero que luego rellenas (quedan vacíos). PUEDES crear cualquier proyecto aquí mismo; PROHIBIDO responder «no puedo crear un proyecto» o pedir permiso o el framework: si el usuario no lo dice, elige HTML/CSS/JS simple y escríbelo ya. Puedes emitir VARIAS code.write en un mismo mensaje y se ejecutan todas.
 - MODIFICAR un fichero que YA existe: usa code.edit (search→replace de SOLO las líneas que cambian), NO reescribas el fichero entero con code.write. Reescribir un fichero grande entero es lento, gasta muchísimos tokens y es fácil que se trunque o se altere lo que no debía; code.edit cambia solo el trozo y conserva el resto intacto. code.write es para CREAR ficheros nuevos (o una reescritura total que el usuario pida a propósito), no para un cambio puntual.
-- Habla SOLO de archivos y contenido que aparezcan en el CONTEXTO o en resultados de herramientas. Cita rutas y líneas reales. Si no lo sabes, léelo, no lo inventes.
+- Habla SOLO de archivos y contenido que aparezcan en el CONTEXTO o en resultados de herramientas. Cita rutas y líneas reales. Si no lo sabes, léelo, no lo inventes.${memReglas}
 
 Cómo actuar:
 1) Para usar una herramienta responde SOLO con:
@@ -120,7 +133,7 @@ Tú:
 \`\`\`tool
 {"tool": "code.read", "args": {"path": "src/main.py"}}
 \`\`\`
-(y tras leerlo de verdad, propones mejoras CONCRETAS citando líneas — nunca genéricas)${skillsPromptBlock()}`;
+(y tras leerlo de verdad, propones mejoras CONCRETAS citando líneas — nunca genéricas)${memEjemplo}${skillsPromptBlock()}`;
 }
 
 export const ETIQUETA_CONTEXTO = 'CONTEXTO AHORA (estado real del IDE, úsalo):';
@@ -484,36 +497,56 @@ export class Agent {
   // en curso y nada más: una parada que llegaba antes de que el turno empezara
   // (esperando el cerrojo de inferencia, entre dos tareas de un plan) no tenía
   // nada que abortar y el turno arrancaba igual.
-  async handle(userText, onEvent, { signal: externa = null } = {}) {
+  // `typed`: el mensaje lo ESCRIBIÓ el usuario en la caja (ni pegado, ni
+  // adjuntos, ni una tarea del modo Objetivo o del cerebro). Solo eso puede
+  // sostener un recuerdo (memoria compartida, memory-wire.js).
+  async handle(userText, onEvent, { signal: externa = null, typed = false } = {}) {
     const aborter = (this._aborter = new AbortController());
     // Ya parado antes de empezar: ni se apunta el mensaje en el historial ni se
     // llama al modelo.
     if (externa?.aborted) { onEvent({ type: 'aborted', text: '(Parado.)' }); return; }
     const enlazar = () => aborter.abort();
     externa?.addEventListener('abort', enlazar, { once: true });
-    try { return await this._turno(userText, onEvent, aborter.signal); }
+    try { return await this._turno(userText, onEvent, aborter.signal, typed === true); }
     finally { externa?.removeEventListener('abort', enlazar); }
   }
 
-  async _turno(userText, onEvent, signal) {
+  async _turno(userText, onEvent, signal, typed = false) {
     // La marca temporal se pone AL AÑADIR, que es el único momento en que se
     // sabe: el gestor de contexto resuelve «ayer» con la fecha del turno en que
     // se dijo, no con la de ahora (ver annotateDates en acer-core.js). Sin esto
     // la anotación se calla, que es lo correcto, pero no sirve para nada.
-    this.history.push({ role: 'user', content: userText, ts: Date.now() });
+    this.history.push({ role: 'user', content: userText, ts: Date.now(), ...(typed ? { typed: true } : {}) });
+    // Memoria compartida: UNA consulta por turno, antes del primer paso. El
+    // bloque se reutiliza tal cual en cada paso (solo se rehace tras guardar) y
+    // va en el mensaje de estado, no en el prompt de sistema, para no romper el
+    // prefijo. Sin memoria (null) el turno es exactamente el de antes.
+    const mt = await memoria.empezarTurno({
+      history: this.history, conv: this.convId || null,
+      alTarjeta: ev => { if (!signal.aborted) onEvent(ev); },
+    }).catch(() => null);
     for (let step = 0; step < MAX_STEPS; step++) {
       let out;
       try {
         if (signal.aborted) { onEvent({ type: 'aborted', text: '(Parado.)' }); return; }
-        const context = await snapshot().catch(() => '');
+        const estado = await snapshot().catch(() => '');
+        const bloque = mt?.bloque?.text || '';
+        const context = bloque ? (estado ? bloque + '\n' + estado : bloque) : estado;
         if (signal.aborted) { onEvent({ type: 'aborted', text: '(Parado.)' }); return; }
         // Se le PREGUNTA al proveedor si quiere prompt corto en vez de deducirlo
         // por tamaño de contexto: al 27B le cabría y aun así no debe recibirlo.
         // Quien no declare `prefiereCompacto` —todos los demás— recibe
         // exactamente el mismo prompt que antes; para ellos esto es inerte.
+        // `reserveTokens`: sitio para lo que el proveedor mete en el prompt FUERA
+        // de lo que ajusta. El bloque de memoria va DENTRO del mensaje de estado,
+        // que ya cuenta en el array que ajustan el motor propio, ONNX y la API;
+        // reservarlo otra vez le quitaría ese sitio a la historia. Solo quien
+        // ajusta la conversación anterior aparte del turno nuevo (LiteRT) lo
+        // declara y lo recibe. A los demás les llega la señal sola, como antes.
+        const reserva = this.provider.memoriaFueraDelHistorial?.() ? (mt?.bloque?.tokens || 0) : 0;
         out = await this.provider.chat(conContexto(this.history, context, ETIQUETA_CONTEXTO),
           systemPrompt(''),
-          t => onEvent({ type: 'token', text: t }), signal);
+          t => onEvent({ type: 'token', text: t }), reserva > 0 ? { signal, reserveTokens: reserva } : signal);
       } catch (e) {
         // Parar no es un fallo del modelo. Los proveedores que cortan de verdad
         // (fetch abortado, generación interrumpida) LANZAN un AbortError, y esto
@@ -529,6 +562,8 @@ export class Agent {
       if (!calls.length) {
         this.history.push({ role: 'assistant', content: out, ts: Date.now() });
         onEvent({ type: 'text', text: out });
+        // Tras la respuesta: «N recuerdos presentes» y, como mucho, una propuesta.
+        if (mt && !signal.aborted) await mt.fin().catch(() => {});
         return;
       }
 
@@ -542,11 +577,14 @@ export class Agent {
         let result;
         // La señal llega también a la herramienta: un comando largo en el bridge
         // (npm install, un servidor…) se para con el turno en vez de seguir solo.
-        try { result = await runTool(call.tool, call.args, { signal }); }
+        try { result = await runTool(call.tool, call.args, { signal, memoria: mt }); }
         catch (e) {
           if (signal.aborted) { onEvent({ type: 'aborted', text: '(Parado.)' }); return; }
           result = 'ERROR: ' + e.message; onEvent({ type: 'tool_error', tool: call.tool, text: e.message });
         }
+        // Cualquier herramienta que no sea de memoria contamina el turno: lo que
+        // devuelva ya no puede convertirse en un recuerdo sin un clic (falla cerrado).
+        mt?.herramienta(call.tool);
         const resultStr = typeof result === 'string' ? result : JSON.stringify(result);
         onEvent({ type: 'tool_result', tool: call.tool, result: resultStr });
         const pista = resultStr.startsWith('ERROR')

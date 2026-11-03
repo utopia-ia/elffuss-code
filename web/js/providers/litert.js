@@ -193,9 +193,20 @@ export async function unload() {
 // El 4º argumento es la señal sola o `{ signal, onPrefill }` (ver senalDe). Sin
 // normalizarlo, con el objeto de opciones `signal.aborted` no existía y parar no
 // paraba: la respuesta seguía hasta el final.
+// Lo que ocupa el bloque de memoria del turno (agent.js `reserveTokens`): se
+// descuenta del presupuesto de la historia antes de empaquetarla. Aquí sí hace
+// falta: la conversación anterior se empaqueta aparte del turno nuevo (donde va
+// el bloque, en el mensaje de estado), así que el bloque no cuenta en ella.
+// agent.js solo manda la reserva a quien lo declara.
+export const memoriaFueraDelHistorial = () => true;
+const reservaDe = x => (x && typeof x === 'object' && Number.isFinite(x.reserveTokens) && x.reserveTokens > 0 ? Math.floor(x.reserveTokens) : 0);
+// Se guarda para el turno en marcha: la historia solo se empaqueta al rehacer
+// la conversación (rehacerCompactada).
+let reservaTurno = 0;
 export async function chat(history, system, onToken = () => {}, opciones = null) {
   if (!engine) throw new Error('Modelo no cargado');
   const signal = senalDe(opciones);
+  reservaTurno = reservaDe(opciones);
   if (signal?.aborted) return '';   // El prompt de sistema ENTERO. Antes se comparaban sus primeros 200
   // caracteres, de cuando el CONTEXTO AHORA iba al final del sistema. Ya viaja
   // como mensaje `efimero` (ver agent.js), y comparar solo la cabeza escondía lo
@@ -461,7 +472,7 @@ async function rehacerCompactada(history, hasta, system, nuevos, cabecera = CABE
     // El presupuesto de acer-core va en SUS tokens estimados, no en los del modelo.
     const caracteres = previos.reduce((a, m) => a + m.content.length, 0) || 1;
     const suyos = previos.reduce((a, m) => a + estimateTokens(m.content), 0);
-    const presupuesto = Math.max(100, Math.round(ctxTokens * FRAC_HISTORIAL * charsPorToken * suyos / caracteres));
+    const presupuesto = Math.max(100, Math.round(Math.max(0, ctxTokens * FRAC_HISTORIAL - reservaTurno) * charsPorToken * suyos / caracteres));
     // La pregunta de AHORA va al final para que acer-core puntúe con ella; luego se quita.
     const noEsResultado = m => m.role === 'user' && !m.content.startsWith('[resultado');
     const pregunta = ([...nuevos].reverse().find(noEsResultado) || [...history].reverse().find(noEsResultado))?.content || '';

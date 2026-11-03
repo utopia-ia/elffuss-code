@@ -3,6 +3,8 @@ import * as code from './code.js';
 import * as shell from '../shell.js';
 import * as web from './web.js';
 import { anunciar, tocaFichero } from '../actividad.js';
+import { entradas as memoryEntradas } from './memory.js';
+import { alRegistrarHerramientas } from '../memory-wire.js';
 
 export { code };
 
@@ -21,6 +23,14 @@ export const TOOLS = {
   'web.search': { desc: 'Buscar en internet (docs, errores, APIs) — devuelve títulos, URLs y fragmentos', params: { query: 'qué buscar' }, run: a => web.search(a) },
   'web.fetch':  { desc: 'Leer el contenido de texto de una URL (documentación, referencia)', params: { url: 'https://…' }, run: a => web.fetchUrl(a) },
 };
+
+// Memoria compartida: memory-wire.js registra aquí las tres herramientas del
+// motor cuando la memoria carga (solo en el origen de Code). Sin memoria no
+// están, y el catálogo y el prompt quedan exactamente como antes.
+alRegistrarHerramientas(defs => {
+  for (const k of Object.keys(TOOLS)) if (TOOLS[k].memoria) delete TOOLS[k];
+  Object.assign(TOOLS, memoryEntradas(defs));
+});
 
 // Cómo llega el valor de un <param> cuando el modelo usa etiquetas.
 // ─────────────────────────────────────────────────────────────────────────────

@@ -4,6 +4,7 @@
 // «Ajustes → Cerebro»), y las órdenes se entienden en los dos idiomas: una
 // ayuda en inglés que solo entendiera «árbol» mentiría.
 import { t } from '../i18n.js';
+import { intencionBasica } from '../memory-wire.js';
 export const name = 'Básico (sin modelo)';
 export async function load() {}
 
@@ -30,6 +31,11 @@ export async function chat(history, systemPrompt) {
     const body = text.slice(text.indexOf('\n') + 1).trim();
     return body.startsWith('ERROR:') ? 'No pude: ' + body.slice(6).trim() : body;
   }
+
+  // Memoria compartida (solo si está encendida): «recuerda que X», «qué
+  // recuerdas», «olvida X». Olvidar siempre pasa por la tarjeta que pregunta.
+  const mem = intencionBasica(text);
+  if (mem) return call(mem);
 
   const low = text.toLowerCase();
   if (/(árbol|arbol|estructura|qué hay|que hay|\btree\b|\bstructure\b|what'?s in)/.test(low))

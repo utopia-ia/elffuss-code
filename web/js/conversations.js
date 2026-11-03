@@ -150,6 +150,9 @@ function makeConv(id, saved) {
     createdAt: saved?.createdAt || Date.now(), updatedAt: saved?.updatedAt || Date.now(),
   };
   if (saved?.history) conv.agent.history = saved.history;
+  // La memoria compartida apunta de qué conversación sale cada recuerdo («qué
+  // aprendí aquí»). Es el id local de la conversación; no sale del navegador.
+  conv.agent.convId = id;
   convs.set(id, conv);
   return conv;
 }
@@ -303,17 +306,19 @@ export async function descartarPendiente(id) {
 // ESE mensaje y se la quita cuando empieza su turno ('turn' trae el item). Los
 // tres envíos devuelven el id.
 const genQid = () => 'q' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-function encola(id, kind, text) {
+function encola(id, kind, text, extra = {}) {
   const conv = convs.get(id);
   if (!conv) return null;
-  const item = { kind, text, id: genQid() };
+  const item = { kind, text, id: genQid(), ...(extra.typed === true ? { typed: true } : {}) };
   conv.queue.push(item);
   persistConv(conv);
   pump(conv);
   return item.id;
 }
 
-export function send(id, text) { return encola(id, 'chat', text); }
+// `typed`: lo escribió el usuario en la caja (main.js). Solo eso puede sostener
+// un recuerdo; lo demás (comandos, propuestas de la Mente) llega sin la marca.
+export function send(id, text, { typed = false } = {}) { return encola(id, 'chat', text, { typed }); }
 
 // 🎯 Modo Objetivo: en vez de un turno de chat normal, el mensaje se trata
 // como un objetivo — se planifica en tareas y se ejecutan una a una (ver
@@ -414,7 +419,7 @@ async function pump(conv) {
         try {
           if (item.kind === 'goal') await runGoal(conv, item.text, onEvent, { signal });
           else if (item.kind === 'hard' && hardWorkRunner) await hardWorkRunner(conv, item.text, onEvent, { signal });
-          else await conv.agent.handle(item.text, onEvent, { signal });
+          else await conv.agent.handle(item.text, onEvent, { signal, typed: item.typed === true });
         } finally {
           if (!parada && !signal.aborted) {
             try {
