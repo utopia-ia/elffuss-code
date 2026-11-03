@@ -83,6 +83,11 @@ if node vendor/vscode-ext2/check-output.mjs --live web; then
   fi
 fi
 
+# La config de la memoria compartida tiene que ser la de Claw byte a byte (ver
+# sync-memoria.sh): con otra, Code hablaría con otra memoria. Sin poder
+# comprobarlo, no se despliega.
+./sync-memoria.sh --revisa || { echo "✗ la config de la memoria no es la de Claw. No se ha subido nada." >&2; exit 1; }
+
 rsync -az --delete --filter='P blog/***' --filter='P __e4b.litertlm' --exclude='__e4b.litertlm' "${MOTOR[@]}" "${VENDOR[@]}" -e "ssh -i $KEY" web/ "$HOST:$DEST/"
 
 # Con el motor, comprobar lo que el SERVIDOR tiene de verdad: --revisa solo lee
