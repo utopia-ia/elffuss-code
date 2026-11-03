@@ -258,6 +258,8 @@ const L = {
     setSharedUnknown: " · no se pudo consultar el almacén compartido (puede haber más guardado)",
     diskChipTitle: "Modelos guardados en este navegador: {size}{quota}. Pulsa para vaciarlos.", diskChipQuota: " de {quota} disponibles",
     setTelFailed: "⚠️ No se pudo enviar (el servidor no lo aceptó o no hay conexión). Tu texto sigue aquí: prueba otra vez más tarde.",
+    setMemTitle: 'Memoria', setMemDesc: 'Lo que le pides a Elffuss que recuerde de ti. La comparten tus apps Elffuss y vive solo en este navegador.',
+    setMemOnlyProject: 'Solo este proyecto', setMemProjectEmpty: 'Nada guardado solo para este proyecto.', setMemForget: 'Olvidar',
 },
   en: {
     ph: 'Type here… (@ attaches a file)',
@@ -511,6 +513,8 @@ const L = {
     setSharedUnknown: " · the shared store could not be checked (there may be more stored)",
     diskChipTitle: "Models stored in this browser: {size}{quota}. Click to clear them.", diskChipQuota: " of {quota} available",
     setTelFailed: "⚠️ Couldn't send it (the server didn't accept it or there is no connection). Your text is still here: try again later.",
+    setMemTitle: 'Memory', setMemDesc: 'What you ask Elffuss to remember about you. Your Elffuss apps share it, and it lives only in this browser.',
+    setMemOnlyProject: 'This project only', setMemProjectEmpty: 'Nothing saved for this project only.', setMemForget: 'Forget',
 },
 };
 

@@ -22,6 +22,7 @@ import * as conv from './conversations.js';
 import { TASK_PREFIX } from './goal.js';
 import { hardWork, gatherFolder } from './rlm.js';
 import * as workspace from './workspace.js';
+import * as memoria from './memory-wire.js';
 
 // Espacio de trabajo (core): qué de Code puede guardarse en tu disco.
 workspace.init({
@@ -93,6 +94,10 @@ const conFichero = fn => () => { if (!activeFile()) { $('statusbar').textContent
 telemetry.init('elffuss-code'); // opt-in, apagado por defecto — ver Ajustes
 conv.setProvider(rules); // proveedor por defecto para cualquier conversación que se cree
 let activeModel = 'rules';
+// La memoria compartida pregunta qué cerebro hay (para su presupuesto, que sale
+// del registro del motor) y qué carpeta está abierta (sus hechos «del proyecto»).
+memoria.alPreguntarModelo(() => activeModel);
+memoria.alPreguntarProyecto(() => codeTools.handle());
 
 // ---------- chat ----------
 // Los `paths` entre backticks del chat (README.md, .elffuss/soul/x.md…) se
@@ -389,13 +394,24 @@ function onConvEvent(kind, id, payload) {
     // «(Parado.)» lo emiten módulos que no saben de idiomas (agent, goal, la
     // cola…): se pinta en el de la interfaz.
     if (ev.type === 'aborted') addMsg('assistant muted', t('stoppedNote'));
+    // Memoria compartida: la tarjeta (guardado, propuesta, olvidar…) y «N
+    // recuerdos presentes», debajo de la respuesta. Solo se pintan en directo.
+    if (ev.type === 'memoria' || ev.type === 'memoria-usados') {
+      const div = document.createElement('div');
+      div.className = 'msg mem';
+      appendLog(div);
+      if (ev.type === 'memoria') memoria.pintarTarjeta(div, ev, { onSee: abrirMemoria });
+      else memoria.pintarUsados(div, ev.facts);
+      if (!div.childNodes.length) div.remove();
+      $('chat-log').scrollTop = $('chat-log').scrollHeight;
+    }
     // 🎯 Modo Objetivo: la tarjeta de plan se crea con 'plan' y se repinta
     // in-place en cada 'plan_update'/'plan_complete' (mismo nodo, por id).
     if (ev.type === 'plan' || ev.type === 'plan_update' || ev.type === 'plan_complete') renderPlanCard(ev.plan);
   }
 }
 
-function send(text, modo) {
+function send(text, modo, { typed = false } = {}) {
   const active = conv.getActive();
   if (!active) return;
   // Si el modelo ya está con algo (en ESTA conversación o en otra: hay un solo
@@ -404,7 +420,7 @@ function send(text, modo) {
   const burbuja = conv.isBusy() ? burbujaEnCola(text) : addMsg('user', text);
   const qid = modo === 'hard' ? conv.startHardWork(active.id, text)
     : goalMode ? conv.startGoal(active.id, text)
-    : conv.send(active.id, text);
+    : conv.send(active.id, text, { typed });
   if (qid) burbuja.dataset.qid = qid;
 }
 
@@ -1205,6 +1221,15 @@ function fireworks() {
   requestAnimationFrame(frame);
 }
 
+// «Ver memoria» desde una tarjeta: Ajustes, en la sección de memoria.
+function abrirMemoria() {
+  if (location.hash !== '#/settings') location.hash = '#/settings';
+  else renderSettings();
+  let n = 0;
+  const ir = () => { const h = document.getElementById('set-memoria'); if (h && !h.hidden) h.scrollIntoView({ block: 'start' }); else if (n++ < 20) setTimeout(ir, 100); };
+  ir();
+}
+
 function renderSettings() {
   const box = settingsShell(t("setTitle"));
 
@@ -1344,6 +1369,22 @@ function renderSettings() {
     }
   }
   paintWs().catch(() => {});
+
+  // --- Memoria compartida (la de todas las apps de Elffuss) ---
+  // Solo existe en el origen de Code (memory-wire.js): fuera de él la sección no
+  // se pinta. El panel es la página almacén en un iframe; aquí solo se añaden
+  // «Solo este proyecto» y «Sin memoria» para este proyecto.
+  const memH = el('div', 'sk-h', '🧠 ' + t('setMemTitle'));
+  memH.id = 'set-memoria';
+  const memCard = el('div', 'prov-card');
+  memCard.append(el('span', 'muted', t('setMemDesc')));
+  const memZona = el('div');
+  memCard.append(memZona);
+  memH.hidden = memCard.hidden = true;
+  box.append(memH, memCard);
+  memoria.montarAjustes(memZona, { textos: { soloProyecto: t('setMemOnlyProject'), vacioProyecto: t('setMemProjectEmpty'), olvidar: t('setMemForget') } })
+    .then(hay => { if (hay) memH.hidden = memCard.hidden = false; })
+    .catch(() => {});
 
   // --- Almacenamiento del modelo (caché persistente) ---
   box.append(el('div', 'sk-h', t('setStoreTitle')));
@@ -1608,6 +1649,9 @@ async function enterIDE(handle) {
   await conv.init({ onEvent: onConvEvent });
   renderTabsBar();
   renderActiveLog();
+  // La memoria compartida se conecta ya (solo en el origen de Code): así el
+  // primer turno no espera a la página almacén.
+  memoria.cargar().then(m => m?.mem.ready()).catch(() => {});
   addMsg('sys', t('welcome', { name }));
   abreDesdeHash();
   // Abierto desde una notificación con la app cerrada (sw.js → ?notif=…).
@@ -1815,12 +1859,32 @@ const PROMPT_HIST_KEY = 'elffusscode.promptHistory';
 let promptHistory = [];
 try { promptHistory = JSON.parse(localStorage.getItem(PROMPT_HIST_KEY) || '[]'); } catch { /* corrupto */ }
 let promptHistIdx = -1, promptDraft = '';
-function pushPromptHistory(text) {
-  if (promptHistory[promptHistory.length - 1] !== text) promptHistory.push(text);
-  if (promptHistory.length > 100) promptHistory = promptHistory.slice(-100);
+// ¿Lo que hay en la caja lo ha ESCRITO el usuario? Pegar o soltar texto lo
+// marca como no escrito hasta que la caja se vacíe, y lo recuperado con ↑ es
+// escrito solo si lo era al enviarlo (memoria compartida: solo lo escrito
+// puede sostener un recuerdo). La marca de cada entrada del historial va
+// aparte, con el mismo índice; las entradas de antes, sin marca, cuentan como
+// no escritas.
+const PROMPT_ESCRITO_KEY = 'elffusscode.promptHistory.escrito';
+let promptEscrito = [];
+try { promptEscrito = JSON.parse(localStorage.getItem(PROMPT_ESCRITO_KEY) || '[]'); } catch { /* corrupto */ }
+if (!Array.isArray(promptEscrito)) promptEscrito = [];
+let cajaNoEscrita = false, draftNoEscrito = false;
+function pushPromptHistory(text, escrito = false) {
+  const desfase = promptHistory.length - promptEscrito.length;
+  if (desfase > 0) promptEscrito = [...Array(desfase).fill(false), ...promptEscrito];
+  else if (desfase < 0) promptEscrito = promptEscrito.slice(-desfase);
+  if (promptHistory[promptHistory.length - 1] !== text) { promptHistory.push(text); promptEscrito.push(escrito === true); }
+  else promptEscrito[promptEscrito.length - 1] = escrito === true;
+  if (promptHistory.length > 100) { promptHistory = promptHistory.slice(-100); promptEscrito = promptEscrito.slice(-100); }
   try { localStorage.setItem(PROMPT_HIST_KEY, JSON.stringify(promptHistory)); } catch { /* lleno */ }
+  try { localStorage.setItem(PROMPT_ESCRITO_KEY, JSON.stringify(promptEscrito)); } catch { /* lleno */ }
   promptHistIdx = -1; promptDraft = '';
 }
+const escritoEn = i => promptEscrito[i - (promptHistory.length - promptEscrito.length)] === true;
+$('prompt').addEventListener('paste', () => { cajaNoEscrita = true; });
+$('prompt').addEventListener('drop', () => { cajaNoEscrita = true; });
+$('prompt').addEventListener('input', e => { if (!e.target.value) cajaNoEscrita = false; });
 $('prompt').addEventListener('keydown', e => {
   if (!$('menu').hidden) return;                 // el menú «/» ya usa ↑/↓
   const inp = e.target;
@@ -1832,15 +1896,17 @@ $('prompt').addEventListener('keydown', e => {
   if (e.key === 'ArrowDown' && despues.includes('\n')) return;
   if (e.key === 'ArrowUp') {
     if (!promptHistory.length) return;
-    if (promptHistIdx === -1) { promptDraft = inp.value; promptHistIdx = promptHistory.length; }
+    if (promptHistIdx === -1) { promptDraft = inp.value; draftNoEscrito = cajaNoEscrita; promptHistIdx = promptHistory.length; }
     promptHistIdx = Math.max(0, promptHistIdx - 1);
     inp.value = promptHistory[promptHistIdx];
+    cajaNoEscrita = !escritoEn(promptHistIdx);
     e.preventDefault();
     requestAnimationFrame(() => inp.setSelectionRange(inp.value.length, inp.value.length));
   } else if (e.key === 'ArrowDown') {
     if (promptHistIdx === -1) return;
     promptHistIdx++;
     inp.value = promptHistIdx >= promptHistory.length ? (promptHistIdx = -1, promptDraft) : promptHistory[promptHistIdx];
+    cajaNoEscrita = promptHistIdx === -1 ? draftNoEscrito : !escritoEn(promptHistIdx);
     e.preventDefault();
   } else if (e.key === 'Enter' && !e.isComposing && !e.shiftKey) {
     // envío explícito: no depender del submit-on-Enter nativo del <form>,
@@ -1866,10 +1932,14 @@ $('composer').addEventListener('submit', e => {
   if (desdeBoton && active && active.pumping && !active.parando) { conv.stopActive(); return; }
   const text = $('prompt').value.trim();
   if (!text) return;
+  // Escrito: tecleado en la caja (o recuperado con ↑ de algo tecleado), sin
+  // nada pegado ni soltado. Lo que no lo es no puede sostener un recuerdo.
+  const escrito = !cajaNoEscrita;
   $('prompt').value = '';
+  cajaNoEscrita = false;
   pintaAdjuntos();                 // lo adjuntado se fue con el mensaje
-  pushPromptHistory(text);
-  send(text);
+  pushPromptHistory(text, escrito);
+  send(text, undefined, { typed: escrito });
 });
 // Reflejar en el botón si estamos generando (▶ enviar / ■ parar). Se llama desde
 // el onChange de conversaciones cuando cambia «pumping».
@@ -2902,17 +2972,20 @@ conv.setHardWorkRunner(async (c, question, onEvent, { signal }) => {
 
 // resolver @rutas del mensaje: se leen y se adjuntan como contexto
 const _send = send;
-send = async (text) => {
+send = async (text, modo, opts = {}) => {
   if (hardMode) return _send(text, 'hard');
+  let typed = opts.typed === true;
   const refs = [...text.matchAll(/@([\w./-]+\.\w+)/g)].map(m => m[1]);
   if (refs.length) {
     let ctx = '';
     for (const r of [...new Set(refs)].slice(0, 4)) {
       try { ctx += `\n\n--- ${r} ---\n${await codeTools.read({ path: r })}`; } catch { /* ignora */ }
     }
-    if (ctx) text += '\n\n[archivos adjuntos]' + ctx;
+    // Con ficheros adjuntos el mensaje ya no es solo lo que el usuario escribió:
+    // su contenido no puede sostener un recuerdo (memoria compartida).
+    if (ctx) { text += '\n\n[archivos adjuntos]' + ctx; typed = false; }
   }
-  _send(text);
+  _send(text, undefined, { typed });
 };
 
 // ---------- panel de skills (transparente: repo + lista + SKILL.md) ----------
