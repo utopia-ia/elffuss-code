@@ -78,9 +78,12 @@ db.onWrite((store, key) => {
 const guardaPref = (k, v) => { try { localStorage.setItem(k, v); } catch { /* lleno o bloqueado */ } workspace.touch('prefs'); };
 
 import * as telemetry from './telemetry.js';
-import { ofrecerInstalar } from './instalar.js';
+import { ofrecerInstalar, puedeInstalarse, instalar, textoEntrada, entradaInstalar } from './instalar.js';
 
-ofrecerInstalar();   // en el móvil, lo primero: instalarla como app
+// En el móvil, lo primero: instalarla como app. En el ordenador no hay aviso
+// solo: la entrada «Instalar Elffuss Code como app» está en la portada, en
+// File y en Ajustes mientras no esté instalada.
+ofrecerInstalar({ app: 'Elffuss Code', idioma: () => (uiLang() === 'es' ? 'es' : 'en') });
 
 const $ = id => document.getElementById(id);
 // Atajos tal y como se pulsan en ESTA máquina: en un Mac el editor guarda con
@@ -1446,6 +1449,11 @@ function renderSettings() {
   };
   const storeHead = el('div', 'prov-head'); storeHead.append(storeInfo);
   storeCard.append(storeHead, storeMuted, clearBtn, clearMsg);
+  // Instalada, el navegador no borra el modelo por no usarla unos días.
+  const installBtn = entradaInstalar(el('button', 'prov-use', textoEntrada()));
+  installBtn.type = 'button';
+  installBtn.style.marginTop = '8px';
+  storeCard.append(installBtn);
   box.appendChild(storeCard);
   async function paintStorage() {
     const { quota, persisted } = await cacheEstimate();
@@ -3398,6 +3406,7 @@ async function menuFor(which) {
       catch (e) { if (e?.name !== 'AbortError') $('statusbar').textContent = '⚠️ ' + t('openFolderFailed', { e: e?.message || e }); return; }
       try { await enterIDE(handle); } catch (e) { avisaFalloApertura(e); }
     } },
+    ...(puedeInstalarse() ? [{ label: textoEntrada(), run: () => instalar() }] : []),
   ];
   if (which === 'edit') return [
     { label: t('mSearchCode'), hint: '#', run: () => openPalette('#') },
