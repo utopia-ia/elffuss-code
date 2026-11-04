@@ -261,7 +261,12 @@ export async function empezarTurno({ history, conv = null, alTarjeta = () => {} 
     turn,
     get bloque() { return bloque; },
     herramienta(nombre) { if (m.memory.taints(m.cfg, nombre)) turn.tainted = true; },
-    async correr(nombre, args) {
+    // `estado`: el del turno en el que se pidió. Por defecto el turno vivo; el
+    // reintento tras «Permitir» pasa una foto de CUANDO se pidió, porque el
+    // turno sigue corriendo herramientas mientras la tarjeta espera el clic y
+    // una posterior lo contamina: el guardado que pasó la puerta volvería como
+    // propuesta «No sale de tus palabras» y el modelo ya creería otra cosa.
+    async correr(nombre, args, estado = turn) {
       const a = args && typeof args === 'object' ? { ...args } : {};
       // Ámbito de un hecho nuevo: lo que el modelo diga; si no dice nada, el
       // proyecto cuando el hecho es del proyecto, y todas las apps si no.
@@ -269,10 +274,12 @@ export async function empezarTurno({ history, conv = null, alTarjeta = () => {} 
         a.scope = proy && esDelProyecto(a.fact, contexto) ? 'project' : 'all';
       }
       if (a.scope === 'all') delete a.scope;
-      const r = await m.memory.runMemoryTool(m.mem, nombre, a, turn);
+      const foto = { ...estado };
+      const r = await m.memory.runMemoryTool(m.mem, nombre, a, estado);
       if (r.card) {
-        // El permiso se pide al primer guardado: con él, se reintenta ESE guardado.
-        const extra = r.card.type === 'grant' ? { reintento: () => api.correr(nombre, args) } : {};
+        // El permiso se pide al primer guardado: con él, se reintenta ESE guardado,
+        // con el estado del turno de entonces.
+        const extra = r.card.type === 'grant' ? { reintento: () => api.correr(nombre, args, { ...foto }) } : {};
         alTarjeta({ type: 'memoria', card: r.card, ...extra });
       }
       const t = r.card?.type;

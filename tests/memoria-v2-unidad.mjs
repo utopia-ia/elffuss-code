@@ -202,6 +202,23 @@ ok('«Sin memoria»: sin bloque', !/<(memoria|memory)>/.test(llamadas[0]?.histor
 ok('…y sin escrituras', !(await todos()).records.some((x) => /tabs/.test(x.fact)));
 await wire.ponerSinMemoria(false);
 
+// i) Sin permiso todavía: el guardado pide permiso y, tras «Permitir», se repite
+// con el estado del turno de CUANDO se pidió. Si el turno ha corrido otra
+// herramienta después (y por eso está contaminado), el reintento sigue siendo
+// lo que el usuario pidió con sus palabras, no una propuesta «No sale de tus palabras».
+ok('(permiso de Code retirado)', (await store.call('revoke', { origin: 'https://code.elffuss.com' }, { app: 'manager', ui: true, direct: true, manager: true })).ok === true);
+ev = await turno('recuerda que prefiero pnpm y luego mira el package.json', {
+  g: (u, r) => (r === 0 ? llamada('memory.save', { fact: 'Prefiere pnpm' }) : r === 1 ? llamada('code.tree', {}) : 'Vale.'),
+});
+const permiso = ev.find((e) => e.type === 'memoria' && e.card?.type === 'grant');
+ok('sin permiso: tarjeta de permiso con reintento', typeof permiso?.reintento === 'function');
+ok('…y nada guardado aún', !(await todos()).records.some((x) => /pnpm/.test(x.fact)));
+await store.call('grant', { state: 'granted' }, { app: 'code', direct: true });
+await permiso?.reintento?.();
+const pnpm = (await todos()).records.find((x) => /pnpm/.test(x.fact) && x.status === 'active');
+ok('tras «Permitir», aunque el turno corriera otra herramienta después: guardado activo, pedido por el usuario',
+  pnpm?.source?.how === 'user-asked', JSON.stringify({ rec: pnpm?.source, prop: (await todos()).proposals.find((x) => /pnpm/.test(x.fact))?.label }));
+
 // ── 3. Modo básico ──────────────────────────────────────────────────────────
 const rules = await import('../web/js/providers/rules.js');
 const r1 = await rules.chat([{ role: 'user', content: 'recuerda que trabajo en Valencia' }], '');
