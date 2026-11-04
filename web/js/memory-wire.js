@@ -180,15 +180,39 @@ export async function ponerSinMemoria(v) {
 }
 
 // ¿Este hecho es del proyecto? Lo es si nombra el proyecto, «este proyecto» o
-// «el repo», o un fichero o carpeta de su raíz. Lo demás (quién es el usuario,
-// cómo le gusta que le respondan) es de todas las apps.
-export function esDelProyecto(fact, { nombre = '', ficheros = [] } = {}) {
+// «el repo», una ruta, un fichero con extensión o una entrada de su raíz con
+// nombre propio. Lo demás (quién es el usuario, cómo le gusta que le respondan)
+// es de todas las apps, y en la duda también: un hecho personal guardado como
+// del proyecto desaparece del chat y de Claw.
+//   · Una ranura exclusiva (nombre, ciudad, trabajo, cumpleaños, idioma…) nunca
+//     es del proyecto: en otro ámbito no sustituiría a la de todas las apps.
+//   · Una ruta necesita letras en sus trozos y además extensión, barra final o
+//     una carpeta de la raíz delante: «4/11» y «y/o» no son rutas.
+//   · Las carpetas de la raíz con nombre de palabra corriente (web, app, docs,
+//     data, blog…) solo cuentan escritas como ruta («docs/»). Sueltas cuentan
+//     las entradas con punto, guion, guion bajo o cifra (package.json,
+//     tienda_api…), y el nombre del proyecto como palabra entera.
+const EXT_CODIGO = 'js|mjs|cjs|ts|tsx|jsx|json|md|py|rs|go|java|kt|css|scss|html|vue|svelte|toml|yaml|yml|sh|sql|c|cc|cpp|h|rb|php|swift';
+const escaparRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const palabraEntera = (n) => new RegExp(`(^|[^\\p{L}\\p{N}_.-])${escaparRe(n)}($|[^\\p{L}\\p{N}_-])`, 'iu');
+export function esDelProyecto(fact, { nombre = '', ficheros = [], slotOf = M?.core?.slotOf, isExclusive = M?.core?.isExclusive } = {}) {
   const f = String(fact || '');
-  const bajo = f.toLowerCase();
+  if (slotOf && isExclusive) {
+    const ranura = slotOf(f);
+    if (ranura && isExclusive(ranura)) return false;
+  }
   if (/\b(este|el|del|al|en el) (proyecto|repo|repositorio)\b|\b(this|the) (project|repo|repository|codebase)\b/iu.test(f)) return true;
-  if (nombre && nombre.length >= 3 && bajo.includes(nombre.toLowerCase())) return true;
-  if (/(^|[\s«"'(`])[\w.-]+\/[\w./-]*|(^|[\s«"'(`])[\w-]+\.(js|mjs|cjs|ts|tsx|jsx|json|md|py|rs|go|java|kt|css|scss|html|vue|svelte|toml|yaml|yml|sh|sql|c|cc|cpp|h|rb|php|swift)\b/iu.test(f)) return true;
-  return ficheros.some((n) => n && n.length >= 3 && new RegExp(`(^|[^\\p{L}\\p{N}_.-])${n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|[^\\p{L}\\p{N}_-])`, 'iu').test(f));
+  if (nombre && nombre.length >= 3 && palabraEntera(nombre).test(f)) return true;
+  const raiz = new Set(ficheros.filter(Boolean).map((n) => n.toLowerCase()));
+  const rutas = f.match(/[\p{L}\p{N}_.-]+(?:\/[\p{L}\p{N}_.-]*)+/gu) || [];
+  for (const r of rutas) {
+    const trozos = r.split('/');
+    const llenos = trozos.filter(Boolean);
+    if (!llenos.length || !llenos.every((x) => /\p{L}/u.test(x))) continue;
+    if (r.endsWith('/') || new RegExp(`\\.(${EXT_CODIGO})$`, 'iu').test(r) || raiz.has(trozos[0].toLowerCase())) return true;
+  }
+  if (new RegExp(`(^|[\\s«"'(\`])[\\w-]+\\.(${EXT_CODIGO})\\b`, 'iu').test(f)) return true;
+  return [...raiz].some((n) => n.length >= 3 && /[._\-\d]/.test(n) && palabraEntera(n).test(f));
 }
 
 // ── El turno ─────────────────────────────────────────────────────────────────

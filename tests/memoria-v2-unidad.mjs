@@ -220,6 +220,18 @@ for (const [f, esperado] of [
   ['tienda-web usa Vite', true], ['src/app.js tiene el router', true], ['Hay que tocar package.json con cuidado', true],
   ['Prefiere respuestas cortas', false], ['Vive en Valencia', false], ['Programa en Go', false], ['Su web es ejemplo.com', false],
 ]) ok(`¿del proyecto? «${f}» → ${esperado}`, wire.esDelProyecto(f, ctxP) === esperado);
+// Palabras corrientes que también son carpetas de la raíz (web, app, docs…), fechas
+// con barra, «y/o» y un proyecto que se llama como el usuario: datos personales,
+// de todas las apps. Una ranura exclusiva (nombre, ciudad, cumpleaños…) nunca es
+// del proyecto: en otro ámbito no sustituiría a la de todas las apps.
+const ctxW = { nombre: 'ana', ficheros: ['web', 'app', 'docs', 'data', 'src', 'blog', 'package.json', 'vite.config.js', 'tienda_api'] };
+for (const [f, esperado] of [
+  ['Su web es ejemplo.com', false], ['Mi web es ejemplo.com', false], ['Escribe en su blog los domingos', false],
+  ['Trabaja con data science', false], ['Su cumpleaños es el 4/11', false], ['Vive en Madrid y/o Toledo', false],
+  ['Se llama Ana', false], ['Me llamo Ana', false], ['Trabaja en el repo de Acme', false],
+  ['web/js/app.js tiene el router', true], ['La carpeta docs/ tiene la guía', true], ['vite.config.js usa el puerto 5174', true],
+  ['tienda_api va con FastAPI', true], ['En este proyecto los tests van con vitest', true], ['El código de ana usa tabs', true],
+]) ok(`¿del proyecto? (raíz con palabras corrientes) «${f}» → ${esperado}`, wire.esDelProyecto(f, ctxW) === esperado);
 
 console.log(fallos ? `\n❌ ${fallos} fallos` : '\n✅ todo bien');
 process.exit(fallos ? 1 : 0);
