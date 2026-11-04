@@ -315,12 +315,57 @@ function renderActiveLog() {
       }
     }
   }
+  // Las tarjetas de memoria de esta conversación que siguen esperando una
+  // respuesta, y las que llegaron mientras no estaba en pantalla.
+  repintarMemoria(active.id);
   // «Pensando» solo si hay un turno EN MARCHA: esperando el modelo (lo tiene
   // otra conversación) lo que se ve es el mensaje en cola, no una elfa pensando.
   if (active.pumping && active.turno) activeThinking = thinkingBubble();
   // Lo que espera en la cola todavía no está en el historial: sin esto, al
   // volver a la pestaña los mensajes encolados desaparecían de la vista.
   for (const it of active.queue) if (it !== active.turno) burbujaEnCola(typeof it === 'string' ? it : it.text, it?.id);
+}
+
+// Tarjetas de memoria por conversación. Code corre turnos de conversaciones que
+// no están en pantalla (la cola), y una tarjeta que pide un clic (olvidar, «¿Lo
+// recuerdo?», el permiso) no puede perderse: el modelo ya le ha dicho al usuario
+// que se lo ha preguntado. Así que cada tarjeta se apunta en su conversación:
+//   · las que piden respuesta se vuelven a pintar al volver a la conversación
+//     hasta que el usuario contesta (después ya no);
+//   · las demás («Recordado», «N recuerdos presentes»…) se pintan una vez, en
+//     directo o al volver si llegaron con la conversación en segundo plano.
+// Solo viven en esta pestaña: al recargar, lo pendiente está en el panel de
+// Memoria (propuestas) y lo demás ya no pide nada.
+const tarjetasMemoria = new Map();   // convId → [{ ev, hecha, pintada }]
+// «Hay varios parecidos» no avisa cuando se contesta con «No» (memory-cards.js):
+// se pinta una vez, como las informativas, para no repetirla sin fin.
+const PIDEN_RESPUESTA = new Set(['proposal', 'forget', 'grant']);
+const MAX_TARJETAS = 20;
+const pideRespuesta = (e) => e.ev.type === 'memoria' && PIDEN_RESPUESTA.has(e.ev.card?.type);
+function apuntarTarjeta(convId, ev) {
+  const lista = tarjetasMemoria.get(convId) || [];
+  const e = { ev, hecha: false, pintada: false };
+  lista.push(e);
+  tarjetasMemoria.set(convId, lista.slice(-MAX_TARJETAS));
+  return e;
+}
+function pintarMemoria(e) {
+  const div = document.createElement('div');
+  div.className = 'msg mem';
+  appendLog(div);
+  const hecha = () => { e.hecha = true; };
+  if (e.ev.type === 'memoria') memoria.pintarTarjeta(div, e.ev, { onSee: abrirMemoria, onDone: hecha });
+  else memoria.pintarUsados(div, e.ev.facts);
+  e.pintada = true;
+  if (!div.childNodes.length) div.remove();
+  $('chat-log').scrollTop = $('chat-log').scrollHeight;
+}
+function repintarMemoria(convId) {
+  const lista = tarjetasMemoria.get(convId);
+  if (!lista) return;
+  for (const e of lista) if (!e.hecha && (pideRespuesta(e) || !e.pintada)) pintarMemoria(e);
+  const quedan = lista.filter((e) => !e.hecha && pideRespuesta(e));
+  if (quedan.length) tarjetasMemoria.set(convId, quedan); else tarjetasMemoria.delete(convId);
 }
 
 // Un mensaje que espera su turno (⏳). Lleva el id de su item de la cola para
@@ -361,6 +406,14 @@ function onConvEvent(kind, id, payload) {
   // parada, o un ▶ sobre una que seguía trabajando.
   if (kind === 'switch') { renderActiveLog(); paintSendButton(); return; }
   const active = conv.getActive();
+  // Memoria compartida: la tarjeta (guardado, propuesta, olvidar…) y «N
+  // recuerdos presentes», debajo de la respuesta. Se apuntan en SU conversación
+  // aunque no esté en pantalla, y se pintan ahora si lo está (ver apuntarTarjeta).
+  if (kind === 'event' && (payload?.type === 'memoria' || payload?.type === 'memoria-usados')) {
+    const e = apuntarTarjeta(id, payload);
+    if (active && id === active.id) pintarMemoria(e);
+    return;
+  }
   if (!active || id !== active.id) return;
   if (kind === 'pumping') {
     // NO deshabilitar el botón mientras genera: se convierte en PARAR. Antes se
@@ -394,17 +447,6 @@ function onConvEvent(kind, id, payload) {
     // «(Parado.)» lo emiten módulos que no saben de idiomas (agent, goal, la
     // cola…): se pinta en el de la interfaz.
     if (ev.type === 'aborted') addMsg('assistant muted', t('stoppedNote'));
-    // Memoria compartida: la tarjeta (guardado, propuesta, olvidar…) y «N
-    // recuerdos presentes», debajo de la respuesta. Solo se pintan en directo.
-    if (ev.type === 'memoria' || ev.type === 'memoria-usados') {
-      const div = document.createElement('div');
-      div.className = 'msg mem';
-      appendLog(div);
-      if (ev.type === 'memoria') memoria.pintarTarjeta(div, ev, { onSee: abrirMemoria });
-      else memoria.pintarUsados(div, ev.facts);
-      if (!div.childNodes.length) div.remove();
-      $('chat-log').scrollTop = $('chat-log').scrollHeight;
-    }
     // 🎯 Modo Objetivo: la tarjeta de plan se crea con 'plan' y se repinta
     // in-place en cada 'plan_update'/'plan_complete' (mismo nodo, por id).
     if (ev.type === 'plan' || ev.type === 'plan_update' || ev.type === 'plan_complete') renderPlanCard(ev.plan);

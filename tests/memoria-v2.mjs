@@ -21,6 +21,8 @@
 //   · texto pegado y lo recuperado con ↑ de algo pegado no cuentan como escritos;
 //   · tras code.tree, guardar es una propuesta «No sale de tus palabras»;
 //   · olvidar: tarjeta, nada borrado hasta el clic; «Olvidar» y «Deshacer»;
+//   · la tarjeta de una conversación que no está en pantalla aparece al volver a
+//     ella, y una ya contestada no vuelve a salir;
 //   · Ajustes: la sección «Memoria» con el panel (la página almacén en un iframe
 //     visible), «Solo este proyecto» y «Sin memoria»;
 //   · ningún texto de la memoria en ninguna URL pedida, y ningún pageerror.
@@ -182,6 +184,23 @@ ok('con el clic se olvida (sale de los recuerdos)', await hasta(async () => !(aw
 ok('…y se puede deshacer', await hasta(async () => (await tarjetas()).some((x) => /Olvidado/.test(x))));
 await pulsar('Deshacer');
 ok('«Deshacer» lo devuelve', await hasta(async () => (await registros()).some((r) => r.fact === 'Prefiere respuestas cortas' && r.status === 'active')));
+
+// e2) Una conversación que no está en pantalla: sus tarjetas esperan a que vuelvas
+const convA = await p.evaluate(() => window.elffussClaw.conv.getActive().id);
+await p.evaluate(() => { window.elffussClaw.conv.create(); });
+const antesFondo = await p.evaluate(() => window.__llamadas.length);
+await p.evaluate((a) => window.elffussClaw.conv.send(a, 'olvida lo de las respuestas cortas', { typed: true }), convA);
+await hasta(() => p.evaluate(({ a, n }) => window.__llamadas.length > n && !window.elffussClaw.conv.getOpenTabs().find((c) => c.id === a)?.pumping, { a: convA, n: antesFondo }));
+await espera(400);
+ok('la tarjeta de olvidar de otra conversación no sale en la que está en pantalla', !(await tarjetas()).some((x) => /¿Olvido/.test(x)));
+await p.evaluate((a) => window.elffussClaw.conv.switchTo(a), convA);
+ok('al volver a esa conversación, la tarjeta de olvidar está ahí', await hasta(async () => (await tarjetas()).some((x) => /¿Olvido «Prefiere respuestas cortas»\?/.test(x))), (await tarjetas()).join(' | '));
+await pulsar('No');
+ok('…y con «No» no se olvida nada', (await registros()).some((r) => r.fact === 'Prefiere respuestas cortas' && r.status === 'active'));
+await p.evaluate(() => { const c = window.elffussClaw.conv; c.switchTo(c.getOpenTabs().find((x) => x.id !== c.getActive().id).id); });
+await p.evaluate((a) => window.elffussClaw.conv.switchTo(a), convA);
+await espera(300);
+ok('una tarjeta ya contestada no vuelve a salir', !(await tarjetas()).some((x) => /¿Olvido «Prefiere respuestas cortas»\?/.test(x)), (await tarjetas()).join(' | '));
 
 // f) Hecho del proyecto
 await enviar('recuerda que en este proyecto los tests van con vitest');

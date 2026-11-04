@@ -396,11 +396,12 @@ export async function modeloDelCerebro(idActivo) {
 
 // ── Interfaz ─────────────────────────────────────────────────────────────────
 
-// Pinta una tarjeta de memoria en `el`. `onSee` abre la memoria en Ajustes.
-export function pintarTarjeta(el, ev, { onSee } = {}) {
+// Pinta una tarjeta de memoria en `el`. `onSee` abre la memoria en Ajustes;
+// `onDone` avisa de que el usuario ya ha contestado (y no hay que repintarla).
+export function pintarTarjeta(el, ev, { onSee, onDone } = {}) {
   if (!M) return null;
-  const opts = { lang: uiLang(), scheme: SCHEME, onSee };
-  if (ev.card?.type === 'grant' && ev.reintento) opts.onGranted = (si) => { if (si) ev.reintento().catch(() => {}); };
+  const opts = { lang: uiLang(), scheme: SCHEME, onSee, onDone };
+  if (ev.card?.type === 'grant') opts.onGranted = (si) => { onDone?.(); if (si && ev.reintento) ev.reintento().catch(() => {}); };
   return M.cards.renderCard(el, ev.card, M.mem, opts);
 }
 export function pintarUsados(el, facts) {
