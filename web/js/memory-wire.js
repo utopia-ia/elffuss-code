@@ -225,8 +225,9 @@ export function esDelProyecto(fact, { nombre = '', ficheros = [], slotOf = M?.co
 //                 no sea de memoria contamina el turno (falla cerrado).
 //   correr(nombre, args) una herramienta de memoria: su texto para el modelo; la
 //                 tarjeta, por `alTarjeta`.
-//   fin()         tras la respuesta final: «N recuerdos presentes» y la
-//                 propuesta determinista, solo en turnos que escribió el usuario.
+//   fin()         tras la respuesta final: «N recuerdos presentes» si el bloque
+//                 entró, y la propuesta determinista solo en turnos que escribió
+//                 el usuario.
 //
 // `alTarjeta(evento)` recibe { type: 'memoria', card } y { type: 'memoria-usados', facts }.
 export async function empezarTurno({ history, conv = null, alTarjeta = () => {} }) {
@@ -279,8 +280,13 @@ export async function empezarTurno({ history, conv = null, alTarjeta = () => {} 
       return r.text;
     },
     async fin() {
-      if (!typed || incognito) return;
+      if (incognito) return;
+      // «N recuerdos presentes» siempre que el bloque haya entrado en el prompt,
+      // también en un turno que no escribió el usuario (pegado, adjuntos): ahí la
+      // consulta va vacía pero lo fijo («Sobre ti», preferencias) entra igual.
       if (bloque.facts?.length) alTarjeta({ type: 'memoria-usados', facts: bloque.facts });
+      // La propuesta, solo de lo que el usuario escribió.
+      if (!typed) return;
       const scope = proy && esDelProyecto(query, contexto) ? `project:${proy.pid}` : null;
       const state = estadoPropuestas(turn.conv || '');
       const p = await m.memory.maybePropose(m.mem, query, { lang: uiLang(), conv: turn.conv, model, state, incognito, scope }).catch(() => null);

@@ -148,6 +148,12 @@ ev = await turno('recuerda que uso yarn', { typed: false, g: (u, r) => (r === 0 
 recs = (await todos()).records.filter((x) => x.status === 'active');
 ok('un mensaje no escrito (pegado, tarea) no guarda nada', !recs.some((x) => /yarn/.test(x.fact)), JSON.stringify(recs.map((x) => x.fact)));
 ok('…ni deja propuesta', !(await todos()).proposals.some((x) => /yarn/.test(x.fact)));
+// Aunque no sea escrito, el bloque (lo fijo: «Sobre ti», preferencias) ha entrado
+// en el prompt: «N recuerdos presentes» lo tiene que decir igual.
+const estadoNoEscrito = llamadas[0]?.history.find((x) => x.efimero)?.content || '';
+ok('un turno no escrito también lleva el bloque fijo', /<(memoria|memory)>[\s\S]*respuestas cortas/.test(estadoNoEscrito));
+ok('…y lo dice: «N recuerdos presentes» con esos hechos', ev.some((e) => e.type === 'memoria-usados' && e.facts?.some((f) => /respuestas cortas/.test(f))),
+  JSON.stringify(ev.filter((e) => String(e.type).startsWith('memoria'))));
 
 // d) tras otra herramienta, guardar es solo una propuesta
 ev = await turno('recuerda que mi editor favorito es helix', {
