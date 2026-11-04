@@ -4,7 +4,7 @@ import * as shell from '../shell.js';
 import * as web from './web.js';
 import { anunciar, tocaFichero } from '../actividad.js';
 import { entradas as memoryEntradas } from './memory.js';
-import { alRegistrarHerramientas } from '../memory-wire.js';
+import { alRegistrarHerramientas, hoy } from '../memory-wire.js';
 
 export { code };
 
@@ -108,10 +108,14 @@ const resumenDe = v => {
 // porque el modelo la usa; los segundos no los usaba nadie —«ayer» se resuelve
 // con el `ts` del turno en que se dijo (ver annotateDates en acer-core.js), no
 // con este reloj—.
-const horaEstable = (loc) => {
+//
+// La fecha va con el texto del motor (memory-wire.js `hoy`: «Hoy es 2026-11-04,
+// miércoles.»), igual en todas las apps y en la forma de las fechas del bloque
+// <memoria>; antes era «4/11/26», sin día de la semana.
+const horaEstable = () => {
   const d = new Date();
   d.setMinutes(0, 0, 0);
-  return d.toLocaleString(loc, { dateStyle: 'short', timeStyle: 'short' });
+  return `${hoy('es', d.getTime())} Hora: ${String(d.getHours()).padStart(2, '0')}:00.`;
 };
 
 // CONTEXTO AHORA del IDE: proyecto, archivo abierto y árbol resumido.
@@ -126,7 +130,7 @@ export async function snapshotDetalle() {
   const { projectName, currentFile } = code.current();
   let ajeno = false;
   const parts = [
-    'Fecha y hora: ' + horaEstable(),
+    horaEstable(),
     'Proyecto abierto: ' + (projectName || 'ninguno'),
     'Archivo abierto en el editor: ' + (currentFile || 'ninguno'),
   ];

@@ -48,6 +48,17 @@ export function alRegistrarHerramientas(fn) { herramientasPuestas = fn; }
 export function alPreguntarModelo(fn) { modeloActivo = fn; }
 export function alPreguntarProyecto(fn) { proyectoActual = fn; }
 export const lista = () => M;
+
+// La fecha de hoy para el estado vivo de cada turno, con el texto del motor
+// (memory-text.js `todayLine`): «Hoy es 2026-11-04, miércoles.», la misma forma
+// que el bloque <memoria> usa para los eventos, así «¿qué tengo mañana?» tiene
+// con qué responderse. Si el motor no ha cargado, la misma frase hecha aquí.
+const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+export function hoy(lang = 'es', now = Date.now()) {
+  if (M?.text?.todayLine) return M.text.todayLine(lang, { now, strings: M.cfg?.strings });
+  const d = new Date(now), p = (n) => String(n).padStart(2, '0');
+  return `Hoy es ${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}, ${DIAS[d.getDay()]}.`;
+}
 // Un almacén del motor abierto en este mismo proceso (memory-store.js openStore)
 // en lugar de la página almacén por iframe. Code no comparte origen con ella, así
 // que en producción no se usa: es para las pruebas en Node, que no tienen
@@ -454,7 +465,11 @@ export async function montarAjustes(el, { textos }) {
       const olvidar = h('button', 'prov-use', textos.olvidar);
       olvidar.type = 'button';
       // Olvidar pasa por la tarjeta del motor: pregunta, y deja deshacer.
-      olvidar.onclick = () => m.cards.renderCard(zona, { type: 'forget', id: it.id, fact: it.fact }, m.mem, { lang: uiLang(), scheme: SCHEME });
+      // El teclado va a la tarjeta (su «Olvidar»), y si se cierra con «No», vuelve a este botón.
+      olvidar.onclick = () => {
+        const caja = m.cards.renderCard(zona, { type: 'forget', id: it.id, fact: it.fact }, m.mem, { lang: uiLang(), scheme: SCHEME, focusOut: olvidar });
+        caja?.querySelector('button')?.focus();
+      };
       li.append(texto, olvidar, zona);
       ul.append(li);
     }

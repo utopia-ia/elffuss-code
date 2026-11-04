@@ -150,7 +150,14 @@ const estado = await p.evaluate(() => window.__llamadas.at(-1).history.find((x) 
 ok('lo guardado en Claw está en el bloque <memoria> del turno de Code', /<memoria>[\s\S]*Valencia[\s\S]*<\/memoria>/.test(estado), estado.slice(0, 240));
 ok('…en el mensaje de estado, junto al estado del IDE', /Proyecto abierto:/.test(estado));
 ok('…y no en el prompt de sistema', await p.evaluate(() => !/Valencia/.test(window.__llamadas.at(-1).system)));
-ok('«Tenía presentes N recuerdos» bajo la respuesta', await hasta(async () => (await tarjetas()).some((x) => /Tenía presentes \d+ recuerdos/.test(x))));
+ok('«Tenía presentes N recuerdos» bajo la respuesta (o «presente 1 recuerdo»)', await hasta(async () => (await tarjetas()).some((x) => /Tenía presentes? \d+ recuerdos?/.test(x) && !/\b1 recuerdos\b/.test(x))));
+{
+  // La fecha de hoy, local, con su día de la semana y en la forma del bloque, en el estado del turno y no en el sistema.
+  const hoy = await p.evaluate(() => { const d = new Date(), z = (n) => String(n).padStart(2, '0');
+    return `Hoy es ${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}, ${['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'][d.getDay()]}.`; });
+  ok('el estado del turno lleva la fecha de hoy con el día de la semana', estado.includes(hoy), (estado.match(/Hoy es[^\n]*/) || ['(nada)'])[0] + ' vs ' + hoy);
+  ok('…y la fecha no está en el prompt de sistema', await p.evaluate(() => !/Hoy es \d{4}-/.test(window.__llamadas.at(-1).system)));
+}
 
 // c) Pegado: no es escrito, ni recuperado con ↑
 await p.focus('#prompt');
