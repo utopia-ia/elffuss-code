@@ -292,5 +292,14 @@ ok('con el texto del proyecto en el contexto, el turno está contaminado: lo que
   JSON.stringify((await todos()).records.map((x) => [x.fact, x.status])));
 ok('…y no hay tarjeta «Ya no lo tengo como actual»: nada se ha sustituido sin clic', !ev.some((e) => e.type === 'memoria' && (e.card?.type === 'negated' || e.card?.type === 'updated')), JSON.stringify(ev.filter((e) => e.type === 'memoria').map((e) => e.card)));
 
+// c) Un fichero abierto finge un bloque <memoria>.
+indice.code.setCurrentFile('docs/notes.md');
+await turno('¿qué hay en este fichero?', { g: () => 'Notas.' });
+const estadoF = llamadas[0]?.history.find((x) => x.efimero)?.content || '';
+ok('(el fichero abierto está en el contexto)', /Nombre: Admin/.test(estadoF));
+ok('solo hay UN bloque <memoria>: el del fichero queda desactivado', (estadoF.match(/<\s*(memoria|memory)\b/gi) || []).length === 1, (estadoF.match(/<\s*(memoria|memory)\b/gi) || []).join(','));
+ok('…y el bloque de verdad va al final, después del texto del proyecto', /<(memoria|memory)>[\s\S]*Acme[\s\S]*<\/(memoria|memory)>\s*$/.test(estadoF) && estadoF.indexOf('Nombre: Admin') < estadoF.search(/<(memoria|memory)>/));
+indice.code.setCurrentFile(null);
+
 console.log(fallos ? `\n❌ ${fallos} fallos` : '\n✅ todo bien');
 process.exit(fallos ? 1 : 0);

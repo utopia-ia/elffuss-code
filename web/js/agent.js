@@ -537,7 +537,11 @@ export class Agent {
         // queda como propuesta que el usuario confirma con un clic.
         if (foto.ajeno) mt?.ajeno();
         const bloque = mt?.bloque?.text || '';
-        const context = bloque ? (estado ? bloque + '\n' + estado : bloque) : estado;
+        // Con memoria, el texto del proyecto va PRIMERO y con sus etiquetas
+        // <memoria>/<memory> desactivadas, y el bloque de verdad AL FINAL: un
+        // README o un fichero abierto no puede fingir recuerdos del usuario con la
+        // misma redacción (es pública) pegándose detrás del bloque.
+        const context = bloque ? (estado ? memoria.desactivarEtiquetas(estado) + '\n' + bloque : bloque) : estado;
         if (signal.aborted) { onEvent({ type: 'aborted', text: '(Parado.)' }); return; }
         // Se le PREGUNTA al proveedor si quiere prompt corto en vez de deducirlo
         // por tamaño de contexto: al 27B le cabría y aun así no debe recibirlo.

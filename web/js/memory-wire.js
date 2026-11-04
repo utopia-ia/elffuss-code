@@ -215,6 +215,13 @@ export function esDelProyecto(fact, { nombre = '', ficheros = [], slotOf = M?.co
   return [...raiz].some((n) => n.length >= 3 && /[._\-\d]/.test(n) && palabraEntera(n).test(f));
 }
 
+// Texto de otros (README, fichero abierto, árbol) que va junto al bloque: sus
+// etiquetas <memoria>, </memoria>, <memory>, </memory> se desactivan cambiando
+// «<» por «‹», para que no abran ni cierren un bloque de memoria falso.
+export function desactivarEtiquetas(texto) {
+  return String(texto || '').replace(/<(\s*\/?\s*)(memoria|memory)\b/giu, '‹$1$2');
+}
+
 // ── El turno ─────────────────────────────────────────────────────────────────
 // Se llama UNA vez al empezar cada turno, con el mensaje del usuario ya en el
 // historial. Devuelve null sin memoria (y el turno sigue como antes).
