@@ -587,7 +587,10 @@ export class Agent {
         let result;
         // La señal llega también a la herramienta: un comando largo en el bridge
         // (npm install, un servidor…) se para con el turno en vez de seguir solo.
-        try { result = await runTool(call.tool, call.args, { signal, memoria: mt }); }
+        // Un dato de la memoria no sale del navegador por web.* ni terminal.run
+        // en un turno con texto de otros (memory-wire.js filtraMemoria).
+        if (mt?.filtra(call.tool, call.args)) result = memoria.AVISO_FILTRA;
+        else try { result = await runTool(call.tool, call.args, { signal, memoria: mt }); }
         catch (e) {
           if (signal.aborted) { onEvent({ type: 'aborted', text: '(Parado.)' }); return; }
           result = 'ERROR: ' + e.message; onEvent({ type: 'tool_error', tool: call.tool, text: e.message });

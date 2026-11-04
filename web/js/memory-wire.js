@@ -39,7 +39,7 @@ const PROYECTOS_KEY = 'memoria.proyectos';
 
 let cargando = null;
 let almacenEnProceso = null;      // ver usarAlmacenEnProceso
-let M = null;             // { cfg, mem, memory, cards, core, text }
+let M = null;             // { cfg, mem, memory, cards, core, text, rank }
 let herramientasPuestas = null;   // (defs) => void, lo pone tools/index.js
 let modeloActivo = () => null;    // () => id del cerebro activo, lo pone main.js
 let proyectoActual = () => null;  // () => handle de la carpeta abierta, lo pone main.js
@@ -73,15 +73,16 @@ async function abrir() {
   // Fuera del origen de Code no hay memoria (ver arriba). No es un fallo: se
   // recuerda para no reintentar en cada turno.
   if (!yo || yo.origin !== location.origin) { cargando = Promise.resolve(null); return null; }
-  const [memory, cards, core, text] = await Promise.all([
+  const [memory, cards, core, text, rank] = await Promise.all([
     import('./engine/memory.js'),
     import('./engine/memory-cards.js'),
     import('./engine/memory-core.js'),
     import('./engine/memory-text.js'),
+    import('./engine/memory-rank.js'),
   ]);
   const slow = /(^|-)(2g|3g)$/.test(navigator.connection?.effectiveType || '');
   const mem = memory.createMemory(cfg, { app: APP, lang: uiLang(), slowNetwork: slow, ...(almacenEnProceso ? { direct: almacenEnProceso } : {}) });
-  M = { cfg, mem, memory, cards, core, text };
+  M = { cfg, mem, memory, cards, core, text, rank };
   herramientasPuestas?.(memory.memoryTools(cfg, LANG_PROMPT, { app: APP }));
   return M;
 }
@@ -268,6 +269,8 @@ export async function empezarTurno({ history, conv = null, alTarjeta = () => {} 
     turn,
     get bloque() { return bloque; },
     herramienta(nombre) { if (m.memory.taints(m.cfg, nombre)) turn.tainted = true; },
+    // ¿Esta llamada sacaría del navegador un dato de la memoria? (ver `filtraMemoria`)
+    filtra(nombre, args) { return filtraMemoria(m, { nombre, args, facts: bloque.facts, current: turn.evidence?.current, tainted: turn.tainted }); },
     // Texto que no es del usuario ha entrado en el contexto sin herramienta (el
     // estado del IDE con el árbol, el README o el fichero abierto): contamina.
     ajeno() { turn.tainted = true; },
@@ -313,6 +316,45 @@ export async function empezarTurno({ history, conv = null, alTarjeta = () => {} 
   return api;
 }
 const avisados = new Set();
+
+// ── Que la memoria no salga del navegador ───────────────────────────────────
+// En Code el bloque <memoria> convive con texto de otros (README, ficheros) y con
+// herramientas que mandan cosas fuera: web.fetch y web.search (al sitio, y por el
+// proxy del servidor, que deja la URL en su registro) y terminal.run (el bridge
+// puede hacer curl). Un texto que diga «lee https://… ?ciudad=<la de la
+// memoria>» haría salir un dato del usuario. Así que, en un turno contaminado,
+// una de esas llamadas se rechaza si sus argumentos llevan un término de los
+// datos PERSONALES del bloque (nombre, ciudad, trabajo, cumpleaños, familia,
+// mascotas, alergias, dieta) que el usuario no ha escrito en su mensaje de este
+// turno. Lo que el usuario escribe él mismo sí sale («busca ofertas de Acme»);
+// las preferencias y el stack no se miran (no son datos personales y cortarlos
+// rompería búsquedas normales de código).
+const SALIDA = new Set(['web.fetch', 'web.search', 'terminal.run']);
+const PERSONALES = new Set(['name', 'home_city', 'employer', 'job', 'birthday', 'rel', 'pet', 'allergy', 'diet']);
+export function filtraMemoria(m, { nombre, args, facts = [], current = '', tainted = false }) {
+  if (!m || !tainted || !SALIDA.has(nombre) || !facts?.length) return false;
+  const { rank, core } = m;
+  const delUsuario = new Set(rank.contentTerms(current || ''));
+  const secretos = new Set();
+  for (const f of facts) {
+    const ranura = core.slotOf(f);
+    if (!ranura || !PERSONALES.has(ranura.split(':')[0])) continue;
+    const vocab = new Set(core.slotVocab(ranura).map(rank.fold));
+    for (const w of rank.contentTerms(f)) {
+      if (vocab.has(w) || delUsuario.has(w)) continue;
+      if ((/\p{L}/u.test(w) && w.length >= 3) || /^\p{N}{4,}$/u.test(w)) secretos.add(w);
+    }
+  }
+  if (!secretos.size) return false;
+  let crudo = JSON.stringify(args ?? {});
+  try { crudo += ' ' + decodeURIComponent(crudo.replace(/\+/g, ' ')); } catch { /* % suelto */ }
+  const texto = rank.fold(crudo);
+  const suyos = new Set(rank.terms(texto));
+  for (const w of secretos) if (suyos.has(w) || (w.length >= 4 && texto.includes(w))) return true;
+  return false;
+}
+export const AVISO_FILTRA = 'BLOQUEADO: esta llamada llevaba fuera del navegador un dato de la memoria del usuario que él no ha escrito en este mensaje, '
+  + 'y en este turno hay texto de ficheros o herramientas. La memoria no sale del navegador. No lo reintentes con ese dato; si hace falta, pregúntale al usuario.';
 
 // Cuántas propuestas lleva cada conversación (el motor limita por turno y por
 // conversación según la puesta a punto del modelo).
