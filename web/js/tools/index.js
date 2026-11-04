@@ -115,26 +115,35 @@ const horaEstable = (loc) => {
 };
 
 // CONTEXTO AHORA del IDE: proyecto, archivo abierto y árbol resumido.
-export async function snapshot() {
+export async function snapshot() { return (await snapshotDetalle()).text; }
+
+// Lo mismo, diciendo además si lleva texto del PROYECTO (árbol, README, fichero
+// abierto): `ajeno`. Ese texto es de otros —un repo clonado, un fichero bajado—
+// y entra en el contexto en cada paso sin que el modelo lo pida, igual que el
+// resultado de code.tree o code.read. Para la memoria cuenta como tal: contamina
+// el turno (memory-wire.js).
+export async function snapshotDetalle() {
   const { projectName, currentFile } = code.current();
+  let ajeno = false;
   const parts = [
     'Fecha y hora: ' + horaEstable(),
     'Proyecto abierto: ' + (projectName || 'ninguno'),
     'Archivo abierto en el editor: ' + (currentFile || 'ninguno'),
   ];
-  try { parts.push('Árbol del proyecto (resumen):\n' + await code.tree({ depth: 2 })); }
+  try { parts.push('Árbol del proyecto (resumen):\n' + await code.tree({ depth: 2 })); ajeno = true; }
   catch { /* aún sin proyecto */ }
   // GROUNDING: incluye el contenido REAL de los archivos clave (README, config)
   // para que el modelo NO alucine sobre el proyecto — el heal no domina las
   // herramientas code.* así que le damos el material masticado.
   for (const key of ['README.md', 'readme.md', 'package.json', 'pyproject.toml', 'Cargo.toml', 'go.mod']) {
-    try { const body = await code.read({ path: key }); parts.push(`Contenido REAL de ${key}:\n${body.slice(0, 1400)}`); break; } catch { /* siguiente */ }
+    try { const body = await code.read({ path: key }); parts.push(`Contenido REAL de ${key}:\n${body.slice(0, 1400)}`); ajeno = true; break; } catch { /* siguiente */ }
   }
   if (currentFile) {
     try {
       const body = await code.read({ path: currentFile });
       parts.push(`Contenido REAL del archivo abierto ${currentFile}:\n` + body.slice(0, 2000));
+      ajeno = true;
     } catch { /* borrado */ }
   }
-  return parts.join('\n');
+  return { text: parts.join('\n'), ajeno };
 }

@@ -261,6 +261,9 @@ export async function empezarTurno({ history, conv = null, alTarjeta = () => {} 
     turn,
     get bloque() { return bloque; },
     herramienta(nombre) { if (m.memory.taints(m.cfg, nombre)) turn.tainted = true; },
+    // Texto que no es del usuario ha entrado en el contexto sin herramienta (el
+    // estado del IDE con el árbol, el README o el fichero abierto): contamina.
+    ajeno() { turn.tainted = true; },
     // `estado`: el del turno en el que se pidió. Por defecto el turno vivo; el
     // reintento tras «Permitir» pasa una foto de CUANDO se pidió, porque el
     // turno sigue corriendo herramientas mientras la tarjeta espera el clic y

@@ -13,9 +13,10 @@
 //   · la memoria se conecta por el iframe oculto a la página almacén, y en otro
 //     origen (code-copia.test) no hay memoria: ni iframe, ni herramientas, ni
 //     sección en Ajustes;
-//   · «recuerda que…» escrito en la caja: primero la tarjeta de permiso, y con
-//     «Permitir» se guarda; queda en la base de datos de la página almacén, desde
-//     Code, pedido por el usuario;
+//   · «recuerda que…» escrito en la caja: primero la tarjeta de permiso; con
+//     «Permitir», como hay un proyecto abierto (texto de otros en el contexto),
+//     una propuesta, y con «Sí» se guarda en la base de datos de la página
+//     almacén, desde Code, confirmado por el usuario;
 //   · lo que guarda otra app (Claw) entra en el bloque <memoria> del turno de Code;
 //   · texto pegado y lo recuperado con ↑ de algo pegado no cuentan como escritos;
 //   · tras code.tree, guardar es una propuesta «No sale de tus palabras»;
@@ -120,10 +121,16 @@ await enviar('recuerda que prefiero respuestas cortas');
 ok('el primer guardado pide permiso para Code', await hasta(async () => (await tarjetas()).some((x) => /Dejo que Code use la memoria/.test(x))), (await tarjetas()).join(' | '));
 ok('el mensaje de la caja va marcado como escrito', await p.evaluate(() => window.__llamadas.at(-1).history.filter((x) => x.role === 'user' && !x.efimero)[0]?.typed === true));
 await pulsar('Permitir');
-ok('con «Permitir» se guarda: tarjeta «Recordado»', await hasta(async () => (await tarjetas()).some((x) => /Recordado: «Prefiere respuestas cortas»/.test(x))), (await tarjetas()).join(' | '));
+// Hay un proyecto abierto: su árbol y su README entran en cada turno, y eso es
+// texto de otros que contamina el turno (falla cerrado). Lo que pide el usuario
+// queda como propuesta que confirma con un clic.
+ok('con «Permitir», y un proyecto abierto, queda como propuesta que pide el clic', await hasta(async () => (await tarjetas()).some((x) => /¿Lo recuerdo\?[\s\S]*Prefiere respuestas cortas/.test(x))), (await tarjetas()).join(' | '));
+ok('…y no queda activo antes del clic', !(await registros()).some((r) => r.fact === 'Prefiere respuestas cortas'));
+await pulsar('Sí');
+ok('con «Sí» se guarda: tarjeta «Recordado»', await hasta(async () => (await tarjetas()).some((x) => /Recordado: «Prefiere respuestas cortas»/.test(x))), (await tarjetas()).join(' | '));
 let recs = await registros();
 const corta = recs.find((r) => r.fact === 'Prefiere respuestas cortas');
-ok('…en la base de datos de la página almacén, desde Code, pedido por el usuario', corta?.status === 'active' && corta?.source?.app === 'code' && corta?.source?.how === 'user-asked', JSON.stringify(corta?.source));
+ok('…en la base de datos de la página almacén, desde Code, confirmado por el usuario', corta?.status === 'active' && corta?.source?.app === 'code' && corta?.source?.how === 'user-confirmed', JSON.stringify(corta?.source));
 ok('…con el id de la conversación de Code', /^c[a-z0-9]+$/.test(corta?.source?.conv || ''));
 ok('ninguna base de datos de memoria en el origen de Code (solo su bandeja de salida)', await p.evaluate(async () => (await indexedDB.databases()).every((d) => d.name !== 'elffuss-memory')));
 
@@ -178,6 +185,9 @@ ok('«Deshacer» lo devuelve', await hasta(async () => (await registros()).some(
 
 // f) Hecho del proyecto
 await enviar('recuerda que en este proyecto los tests van con vitest');
+await hasta(async () => (await tarjetas()).some((x) => /¿Lo recuerdo\?[\s\S]*vitest/.test(x)));
+await pulsar('Sí');
+await hasta(async () => (await registros()).some((r) => /vitest/.test(r.fact)));
 recs = await registros();
 const vit = recs.find((r) => /vitest/.test(r.fact));
 ok('un hecho de «este proyecto» va al ámbito del proyecto', /^project:p[a-z0-9]{12}$/.test(vit?.scope || ''), vit?.scope);

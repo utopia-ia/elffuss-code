@@ -1,5 +1,5 @@
 // Bucle agéntico de Elffuss Code (mismo protocolo que Elffuss SO).
-import { runTool, toolHelp, snapshot, PARAM_EXACTO, PARAM_NUMERO } from './tools/index.js';
+import { runTool, toolHelp, snapshotDetalle, PARAM_EXACTO, PARAM_NUMERO } from './tools/index.js';
 import { skillsPromptBlock } from './skills.js';
 import * as telemetry from './telemetry.js';
 import * as memoria from './memory-wire.js';
@@ -529,7 +529,13 @@ export class Agent {
       let out;
       try {
         if (signal.aborted) { onEvent({ type: 'aborted', text: '(Parado.)' }); return; }
-        const estado = await snapshot().catch(() => '');
+        const foto = await snapshotDetalle().catch(() => ({ text: '', ajeno: false }));
+        const estado = foto.text;
+        // El texto del proyecto (árbol, README, fichero abierto) es de otros y
+        // entra sin que el modelo lo pida: contamina el turno como lo haría
+        // code.read (falla cerrado). Un «recuerda que…» con un proyecto abierto
+        // queda como propuesta que el usuario confirma con un clic.
+        if (foto.ajeno) mt?.ajeno();
         const bloque = mt?.bloque?.text || '';
         const context = bloque ? (estado ? bloque + '\n' + estado : bloque) : estado;
         if (signal.aborted) { onEvent({ type: 'aborted', text: '(Parado.)' }); return; }
