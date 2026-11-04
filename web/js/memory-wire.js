@@ -112,17 +112,25 @@ export function intencionBasica(texto) {
 
 // ── Proyecto ─────────────────────────────────────────────────────────────────
 
-// La lista se lee una vez y se guarda en memoria: si el navegador no deja
-// guardar, el pid sigue siendo el mismo durante la sesión.
-let listaProyectos = null;
+// El registro lo comparten TODAS las pestañas de Code (es el kv de IndexedDB),
+// así que se relee siempre antes de usarlo y se modifica dentro de un cerrojo
+// Web Lock: leer, cambiar y escribir de una vez. Una copia guardada en la
+// pestaña hacía que otra pestaña abierta antes diera OTRO pid al mismo proyecto
+// (sus hechos quedaban huérfanos) o deshiciera el «Sin memoria» puesto en otra.
+// Solo si el navegador no deja leer se usa la última lista de esta pestaña, para
+// que el pid siga siendo el mismo durante la sesión.
+let respaldoProyectos = null;
 async function proyectos() {
-  if (!listaProyectos) {
-    try { const v = await db.get('kv', PROYECTOS_KEY); listaProyectos = Array.isArray(v) ? v : []; }
-    catch { listaProyectos = []; }
-  }
-  return listaProyectos;
+  try { const v = await db.get('kv', PROYECTOS_KEY); respaldoProyectos = Array.isArray(v) ? v : []; }
+  catch { if (!respaldoProyectos) respaldoProyectos = []; }
+  return respaldoProyectos;
 }
 const guardarProyectos = (lista) => db.set('kv', PROYECTOS_KEY, lista).catch(() => { /* sin almacenamiento: vale para esta sesión */ });
+const CERROJO_PROYECTOS = 'elffuss-code-memoria-proyectos';
+function cambiarProyectos(fn) {
+  const locks = globalThis.navigator?.locks;
+  return locks?.request ? locks.request(CERROJO_PROYECTOS, fn) : fn();
+}
 async function buscar(lista, handle) {
   for (const p of lista) {
     try { if (p?.handle && await p.handle.isSameEntry(handle)) return p; } catch { /* handle viejo */ }
@@ -140,12 +148,20 @@ const nuevoPid = () => {
 export async function proyecto({ crear = true } = {}) {
   const h = proyectoActual();
   if (!h) return null;
-  const lista = await proyectos();
-  let p = await buscar(lista, h);
+  let p = await buscar(await proyectos(), h);
+  // Crear va dentro del cerrojo y relee: otra pestaña puede haberlo creado
+  // entre la lectura de arriba y esta.
   if (!p && crear) {
-    p = { handle: h, pid: nuevoPid(), sinMemoria: false };
-    lista.push(p);
-    await guardarProyectos(lista);
+    p = await cambiarProyectos(async () => {
+      const lista = await proyectos();
+      let q = await buscar(lista, h);
+      if (!q) {
+        q = { handle: h, pid: nuevoPid(), sinMemoria: false };
+        lista.push(q);
+        await guardarProyectos(lista);
+      }
+      return q;
+    });
   }
   return p ? { pid: p.pid, sinMemoria: p.sinMemoria === true } : null;
 }
@@ -153,11 +169,13 @@ export async function proyecto({ crear = true } = {}) {
 export async function ponerSinMemoria(v) {
   const h = proyectoActual();
   if (!h) return false;
-  const lista = await proyectos();
-  let p = await buscar(lista, h);
-  if (!p) { p = { handle: h, pid: nuevoPid(), sinMemoria: false }; lista.push(p); }
-  p.sinMemoria = !!v;
-  await guardarProyectos(lista);
+  await cambiarProyectos(async () => {
+    const lista = await proyectos();
+    let p = await buscar(lista, h);
+    if (!p) { p = { handle: h, pid: nuevoPid(), sinMemoria: false }; lista.push(p); }
+    p.sinMemoria = !!v;
+    await guardarProyectos(lista);
+  });
   return true;
 }
 
