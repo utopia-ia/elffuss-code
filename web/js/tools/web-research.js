@@ -838,7 +838,8 @@ export function createResearch({ get, parseHTML, terms, buildBM25, Readability =
   // asked for them, as it is not for the page.
   async function readPage(s, url, { alternates = true, guessAmp = false } = {}) {
     const r = await s.fetch(url);
-    if (!r.ok) return { url, error: { status: r.status, code: r.code || '' } };
+    // `message`: the app's own words for what went wrong, when its get() gives them (Claw names each proxy refusal).
+    if (!r.ok) return { url, error: { status: r.status, code: r.code || '', message: r.message || '' } };
     if (!isTextual(r.type)) return { url, error: { type: r.type } };
     const finalUrl = r.url || url;
     if (/json/i.test(r.type)) return { url: finalUrl, json: r.text };
@@ -916,6 +917,7 @@ export function createResearch({ get, parseHTML, terms, buildBM25, Readability =
       if (p.items.length) return { items: p.items };
       if (p.blocked) blocked = true;
       else if (r.ok) return { items: [] };
+      else s.notes.push({ ddg: r.code || r.status, message: r.message || '' });
     }
     return { items: [], blocked };
   }
