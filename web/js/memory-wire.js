@@ -249,6 +249,33 @@ export function desactivarEtiquetas(texto) {
 //                 el usuario.
 //
 // `alTarjeta(evento)` recibe { type: 'memoria', card } y { type: 'memoria-usados', facts }.
+// ---------- ¿Contesta la página almacén? ----------
+// `alCambiarCaida(fn)`: fn(caida) cada vez que cambia. Mientras está caída se le pregunta otra vez en segundo plano,
+// esperando más cada vez (2 s, 4 s… hasta un minuto); context() deja que un cliente que se rindió lo intente de nuevo.
+let caida = false, reintento = null, espera = 2000;
+const avisosCaida = new Set();
+export function alCambiarCaida(fn) { avisosCaida.add(fn); fn(caida); return () => avisosCaida.delete(fn); }
+export const estadoCaida = () => caida;
+export async function probar() {
+  const m = await cargar();
+  if (!m) return null;                 // sin memoria en esta web: ni caída ni viva
+  const r = await m.mem.context({ query: '', model: {}, scopes: ['all', `app:${APP}`] }).catch(() => ({ unavailable: true }));
+  return !r?.unavailable;
+}
+/** Una pregunta ahora (al cargar la página, antes de que el modelo la ocupe) y el estado que salga. */
+export async function comprobarAhora() { const ok = await probar().catch(() => false); if (ok !== null) marcarCaida(!ok); }
+function marcarCaida(v) {
+  if (v !== caida) { caida = v; for (const f of avisosCaida) { try { f(v); } catch { /* — */ } } }
+  clearTimeout(reintento); reintento = null;
+  if (!v) { espera = 2000; return; }
+  reintento = setTimeout(async () => {
+    reintento = null;
+    const ok = await probar().catch(() => false);
+    if (!ok) espera = Math.min(espera * 2, 60000);
+    marcarCaida(!ok);
+  }, espera);
+}
+
 export async function empezarTurno({ history, conv = null, alTarjeta = () => {} }) {
   const m = await cargar();
   if (!m) return null;
@@ -271,11 +298,9 @@ export async function empezarTurno({ history, conv = null, alTarjeta = () => {} 
     return { text: r.text || '', tokens: r.tokens || 0, facts: r.facts || [], unavailable: !!r.unavailable };
   };
   let bloque = await pedir().catch(() => ({ text: '', tokens: 0, facts: [] }));
-  // Un aviso por conversación cuando la página almacén no contesta.
-  if (bloque.unavailable && !incognito && !avisados.has(turn.conv)) {
-    avisados.add(turn.conv);
-    alTarjeta({ type: 'memoria', card: { type: 'unavailable' } });
-  }
+  // La página almacén sin contestar es un estado del botón de Ajustes, nunca una tarjeta en la conversación (en el
+  // chat de elffuss.com, Kiko: «queda muy feo»). Se reintenta sola en segundo plano (ver estadoCaida).
+  if (!incognito) marcarCaida(!!bloque.unavailable);
   const api = {
     turn,
     get bloque() { return bloque; },
@@ -326,7 +351,6 @@ export async function empezarTurno({ history, conv = null, alTarjeta = () => {} 
   };
   return api;
 }
-const avisados = new Set();
 
 // ── Que la memoria no salga del navegador ───────────────────────────────────
 // En Code el bloque <memoria> convive con texto de otros (README, ficheros) y con

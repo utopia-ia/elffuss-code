@@ -882,3 +882,7 @@ body.chat-full #chat { border-left: none; }
 #landing .made-in { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 4px 0 0; font-size: 12px; color: var(--muted); }
 .made-in-flag { width: 24px; height: 16px; flex: none; border-radius: 2px; box-shadow: 0 0 0 1px rgb(0 0 0 / 0.12); }
 .made-in-ic { width: 11px; height: 11px; flex: none; margin-left: -2px; }
+
+/* La memoria compartida sin contestar: un punto en el botón de Ajustes (su título dice por qué). */
+#btn-settings { position: relative; }
+#btn-settings.mem-caida::after { content: ""; position: absolute; top: 4px; right: 4px; width: 7px; height: 7px; border-radius: 50%; background: var(--warn, #e3b968); box-shadow: 0 0 0 2px var(--bg, #303752); }

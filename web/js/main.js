@@ -1763,6 +1763,16 @@ async function boot() {
   // #/lab no necesita proyecto: es otra página.
   if (location.hash === '#/lab') { location.replace('lab.html'); return; }
   applyI18n(); // localiza el chrome estático (placeholder) antes de pintar nada
+  // La memoria compartida sin contestar: un punto en el botón de Ajustes (con su título), nunca una tarjeta en la
+  // conversación. Se le pregunta una vez al arrancar, antes de que cargue el modelo.
+  memoria.alCambiarCaida((caida) => {
+    const b = $('btn-settings');
+    if (!b) return;
+    b.classList.toggle('mem-caida', caida);
+    b.title = t('tTopSettings') + (caida ? ' · ' + t('memCaida') : '');
+    b.setAttribute('aria-label', b.title);
+  });
+  memoria.comprobarAhora().catch(() => {});
   // Caché de modelos (persistente + service worker) ANTES de descargar nada,
   // para que hasta la primera descarga de pesos quede cacheada y no se repita.
   ensureModelCache().finally(() => preloadModel());
