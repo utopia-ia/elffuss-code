@@ -308,23 +308,33 @@ const esDe = (mapa, herramienta, param) =>
 // contenido no casaba, y `code.write` escribía un fichero VACÍO (content vale ''
 // por defecto). Una llamada sin cerrar no casa nada, que es lo que se quiere:
 // mejor no ejecutar que ejecutar a medias.
-const RE_FUNCION = /<function\s+name=["']([\w.\-]+)["']\s*>((?:(?=(<!\[CDATA\[[\s\S]*?\]\]>(?=\s*<\/param\s*>)))\3|[\s\S])*?)<\/function\s*>/g;
+//
+// También la forma de LFM3 (y Qwen3-Coder), `<function=X><parameter=k>v</parameter>`,
+// dentro de `<tool_call>…</tool_call>`. LFM3 es el modelo por defecto desde el
+// 2-nov-2026 y escribe SOLO así, pida lo que pida el prompt: sin esta forma, cada
+// llamada suya se mostraba como respuesta final y el agente no tocaba un fichero.
+const RE_FUNCION = /<function(?:\s+name=["']([\w.\-]+)["']\s*|=([\w.\-]+))>((?:(?=(<!\[CDATA\[[\s\S]*?\]\]>(?=\s*<\/param(?:eter)?\s*>)))\4|[\s\S])*?)<\/function\s*>/g;
 
 function tagsConPosicion(text) {
   const out = [];
   RE_FUNCION.lastIndex = 0;
   let m;
   while ((m = RE_FUNCION.exec(text))) {
-    const herramienta = m[1];
+    const herramienta = m[1] || m[2];
     const args = {};
     // El `\s*` va DENTRO de la alternativa de CDATA, no antes: puesto fuera se
     // come la sangría de la primera línea del cuerpo normal.
-    const pre = /<param\s+name=["']([\w.\-]+)["']\s*>(?:\s*<!\[CDATA\[([\s\S]*?)\]\]>\s*<\/param\s*>|([\s\S]*?)<\/param\s*>)/g;
+    const pre = /<param(?:\s+name=["']([\w.\-]+)["']\s*|eter=([\w.\-]+))>(?:\s*<!\[CDATA\[([\s\S]*?)\]\]>\s*<\/param(?:eter)?\s*>|([\s\S]*?)<\/param(?:eter)?\s*>)/g;
     let p;
-    while ((p = pre.exec(m[2]))) {
-      const nombre = p[1];
-      const enCdata = p[2] !== undefined;
-      const crudo = enCdata ? p[2] : (p[3] || '');
+    while ((p = pre.exec(m[3]))) {
+      const nombre = p[1] || p[2];
+      const enCdata = p[3] !== undefined;
+      let crudo = enCdata ? p[3] : (p[4] || '');
+      // La plantilla de LFM3 pone el valor entre DOS saltos suyos
+      // («<parameter=k>\n» valor «\n</parameter>»): se quitan esos dos y nada más,
+      // y el contenido ya va limpio por la rama exacta de abajo.
+      const formaLfm3 = p[2] !== undefined && !enCdata;
+      if (formaLfm3) crudo = crudo.replace(/^\r?\n/, '').replace(/\r?\n$/, '');
       if (esDe(PARAM_EXACTO, herramienta, nombre)) {
         // El valor ES el fichero. Dentro de un CDATA, exacto y sin tocar. Fuera,
         // se quita UN salto de línea inicial y solo uno: el modelo abre el valor
@@ -332,7 +342,7 @@ function tagsConPosicion(text) {
         // blanco del fichero. El salto FINAL se conserva, que es el que un
         // fichero quiere tener. Quien necesite que el contenido empiece de verdad
         // con una línea en blanco tiene el CDATA.
-        args[nombre] = enCdata ? crudo : crudo.replace(/^\r?\n/, '');
+        args[nombre] = enCdata || formaLfm3 ? crudo : crudo.replace(/^\r?\n/, '');
       } else {
         // Escalar: se recorta y se le quita UN par de comillas que lo envuelva.
         // Sin esto, un `path` que el modelo entrecomilla crea una carpeta «"src»
@@ -398,7 +408,7 @@ export function parseToolCalls(text) {
     if (c) { hallados.push({ pos: mm.index, call: c }); reclamado.push([mm.index, mm.index + mm[0].length]); }
   }
 
-  // 1b) formato <function><param> (MiniCPM5 y afines)
+  // 1b) formato <function><param> (MiniCPM5 y afines) y <function=…><parameter=…> (LFM3)
   for (const t of tagsConPosicion(text)) {
     hallados.push({ pos: t.pos, call: { tool: t.tool, args: t.args } });
     reclamado.push([t.pos, t.fin]);
