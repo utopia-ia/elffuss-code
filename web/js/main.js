@@ -23,6 +23,8 @@ import { TASK_PREFIX } from './goal.js';
 import { hardWork, gatherFolder } from './rlm.js';
 import * as workspace from './workspace.js';
 import * as memoria from './memory-wire.js';
+import { configureMedia, isMediaTool, mediaIdIn } from './tools/media.js';
+import * as mediaUi from './media-ui.js';
 
 // Espacio de trabajo (core): qué de Code puede guardarse en tu disco.
 workspace.init({
@@ -299,8 +301,15 @@ function renderActiveLog() {
   for (const m of active.agent.history) {
     if (m.role === 'user') {
       if (m.content.startsWith('[resultado ')) {
-        const nl = m.content.indexOf('\n');
-        addToolResult(nl > 0 ? m.content.slice(nl + 1) : '');
+        // Un paso puede llevar varios resultados; los de medios vuelven como su tarjeta, con el medio de este navegador.
+        for (const bloque of m.content.split(/\n\n(?=\[resultado )/)) {
+          const nl = bloque.indexOf('\n');
+          const tool = bloque.slice(11, nl > 0 ? nl - 1 : undefined), res = nl > 0 ? bloque.slice(nl + 1) : '';
+          if (isMediaTool(tool)) mediaUi.restoredMediaCard(tool, res, mediaIdIn(res));
+          else addToolResult(res);
+        }
+      } else if (m.attach?.length) {
+        addMsg('user', m.shown ?? '').append(mediaUi.attachmentsEl(m.attach));
       } else if (m.content.startsWith(TASK_PREFIX)) {
         // objetivo/tareas internas del modo Goal: no son burbujas sueltas —
         // la tarjeta de plan las muestra todas. Se pinta justo en el punto
@@ -444,7 +453,8 @@ function onConvEvent(kind, id, payload) {
     if (ev.type === 'token') activeThinking?.tick(ev.text);
     if (ev.type === 'text') addMsg('assistant', ev.text);
     if (ev.type === 'tool') { activeThinking?.tool(ev.call.tool); addTool(ev.call.tool, ev.call.args?.path || ev.call.args?.query || ''); }
-    if (ev.type === 'tool_result') addToolResult(ev.result);
+    // Las herramientas de medios ya pintan su tarjeta (media-ui.js): el resultado en texto sobra.
+    if (ev.type === 'tool_result' && !isMediaTool(ev.tool)) addToolResult(ev.result);
     if (ev.type === 'progress') activeThinking?.tool(ev.text);
     if (ev.type === 'error') addMsg('assistant err', ev.text);
     // «(Parado.)» lo emiten módulos que no saben de idiomas (agent, goal, la
@@ -456,16 +466,20 @@ function onConvEvent(kind, id, payload) {
   }
 }
 
-function send(text, modo, { typed = false } = {}) {
+// `attach`: lo adjuntado con el «+» o el micrófono (media-ui.js), ya leído aquí. El modelo lee `context` delante del
+// mensaje; la burbuja enseña las tarjetas, no su texto.
+function send(text, modo, { typed = false, attach = null } = {}) {
   const active = conv.getActive();
   if (!active) return;
+  const { kept, context } = mediaUi.attachmentContext(attach || []);
   // Si el modelo ya está con algo (en ESTA conversación o en otra: hay un solo
   // modelo y se turnan), el mensaje espera su turno y se ve así (⏳) hasta que
   // empiece el suyo.
   const burbuja = conv.isBusy() ? burbujaEnCola(text) : addMsg('user', text);
+  if (kept.length) burbuja.append(mediaUi.attachmentsEl(kept));
   const qid = modo === 'hard' ? conv.startHardWork(active.id, text)
-    : goalMode ? conv.startGoal(active.id, text)
-    : conv.send(active.id, text, { typed });
+    : goalMode && !kept.length ? conv.startGoal(active.id, text)
+    : conv.send(active.id, text, { typed, attach: kept, context });
   if (qid) burbuja.dataset.qid = qid;
 }
 
@@ -1981,7 +1995,7 @@ $('composer').addEventListener('submit', e => {
   if (desdeBoton && active?.parando) return;
   if (desdeBoton && active && active.pumping && !active.parando) { conv.stopActive(); return; }
   const text = $('prompt').value.trim();
-  if (!text) return;
+  if (!text && !mediaUi.hasReadyAttachments()) return;
   // Escrito: tecleado en la caja (o recuperado con ↑ de algo tecleado), sin
   // nada pegado ni soltado. Lo que no lo es no puede sostener un recuerdo.
   const escrito = !cajaNoEscrita;
@@ -1989,7 +2003,7 @@ $('composer').addEventListener('submit', e => {
   cajaNoEscrita = false;
   pintaAdjuntos();                 // lo adjuntado se fue con el mensaje
   pushPromptHistory(text, escrito);
-  send(text, undefined, { typed: escrito });
+  send(text, undefined, { typed: escrito, attach: mediaUi.takeAttachments() });
 });
 // Reflejar en el botón si estamos generando (▶ enviar / ■ parar). Se llama desde
 // el onChange de conversaciones cuando cambia «pumping».
@@ -3023,7 +3037,7 @@ conv.setHardWorkRunner(async (c, question, onEvent, { signal }) => {
 // resolver @rutas del mensaje: se leen y se adjuntan como contexto
 const _send = send;
 send = async (text, modo, opts = {}) => {
-  if (hardMode) return _send(text, 'hard');
+  if (hardMode && !opts.attach?.length) return _send(text, 'hard');
   let typed = opts.typed === true;
   const refs = [...text.matchAll(/@([\w./-]+\.\w+)/g)].map(m => m[1]);
   if (refs.length) {
@@ -3035,8 +3049,37 @@ send = async (text, modo, opts = {}) => {
     // su contenido no puede sostener un recuerdo (memoria compartida).
     if (ctx) { text += '\n\n[archivos adjuntos]' + ctx; typed = false; }
   }
-  _send(text, undefined, { typed });
+  _send(text, undefined, { typed, attach: opts.attach });
 };
+
+// ---- imagen, audio y vídeo (tools/media.js) ----
+// Mientras corre una tarea de medios el cerebro suelta la gráfica (en un móvil la pestaña tiene unos 2 GB) y vuelve
+// después; el turno lo espera (waitLlm), porque el cerrojo de inferencia es de todas las conversaciones.
+let soltadoPorMedios = null, recargaMedios = null;
+mediaUi.configureUi({ log: () => $('chat-log'), append: (n) => { appendLog(n); $('chat-log').scrollTop = $('chat-log').scrollHeight; } });
+configureMedia({
+  lang: () => (uiLang() === 'es' ? 'es' : 'en'),
+  async unloadLlm() {
+    const mod = conv.getProvider();
+    if (!mod || mod === rules || typeof mod.unload !== 'function') return;
+    soltadoPorMedios = mod;
+    try { await mod.unload(); } catch (e) { console.warn('[medios] no se pudo soltar el cerebro', e); }
+    pintaDot('loading', activeModel);
+  },
+  reloadLlm() {
+    const mod = soltadoPorMedios;
+    soltadoPorMedios = null;
+    if (!mod) return;
+    recargaMedios = mod.load(() => {}).then(() => pintaDot('on', activeModel), (e) => { console.warn('[medios] el cerebro no volvió', e); pintaDot('error', activeModel); })
+      .finally(() => { recargaMedios = null; });
+    return recargaMedios;
+  },
+  waitLlm: () => recargaMedios,
+  // Como cualquier otra cosa que Elffuss quiere hacer y se pregunta: con confirm, igual que escribir en el proyecto.
+  consent: async (q) => confirm(`${mediaUi.consentMeta(q).label}\n\n${mediaUi.consentMeta(q).desc}`),
+  card: (call) => mediaUi.mediaCard(call, { onStop: () => conv.stopActive() }),
+});
+mediaUi.mountComposer({ onVoiceText: (text, voice) => send(text, undefined, { attach: [voice] }), sendButton: () => $('btn-send') });
 
 // ---------- panel de skills (transparente: repo + lista + SKILL.md) ----------
 // Mismo sitio que Ajustes. Dos partes que no se mezclan: «Instaladas» arriba y

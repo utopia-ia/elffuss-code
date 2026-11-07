@@ -309,7 +309,8 @@ const genQid = () => 'q' + Date.now().toString(36) + Math.random().toString(36).
 function encola(id, kind, text, extra = {}) {
   const conv = convs.get(id);
   if (!conv) return null;
-  const item = { kind, text, id: genQid(), ...(extra.typed === true ? { typed: true } : {}) };
+  const item = { kind, text, id: genQid(), ...(extra.typed === true ? { typed: true } : {}),
+    ...(extra.attach?.length ? { attach: extra.attach, context: extra.context || '' } : {}) };
   conv.queue.push(item);
   persistConv(conv);
   pump(conv);
@@ -318,7 +319,7 @@ function encola(id, kind, text, extra = {}) {
 
 // `typed`: lo escribió el usuario en la caja (main.js). Solo eso puede sostener
 // un recuerdo; lo demás (comandos, propuestas de la Mente) llega sin la marca.
-export function send(id, text, { typed = false } = {}) { return encola(id, 'chat', text, { typed }); }
+export function send(id, text, { typed = false, attach = null, context = '' } = {}) { return encola(id, 'chat', text, { typed, attach, context }); }
 
 // 🎯 Modo Objetivo: en vez de un turno de chat normal, el mensaje se trata
 // como un objetivo — se planifica en tareas y se ejecutan una a una (ver
@@ -419,7 +420,7 @@ async function pump(conv) {
         try {
           if (item.kind === 'goal') await runGoal(conv, item.text, onEvent, { signal });
           else if (item.kind === 'hard' && hardWorkRunner) await hardWorkRunner(conv, item.text, onEvent, { signal });
-          else await conv.agent.handle(item.text, onEvent, { signal, typed: item.typed === true });
+          else await conv.agent.handle(item.text, onEvent, { signal, typed: item.typed === true, context: item.context || '', attach: item.attach || null });
         } finally {
           if (!parada && !signal.aborted) {
             try {

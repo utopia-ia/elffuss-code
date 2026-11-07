@@ -314,6 +314,22 @@ export async function write({ path, content = '', _interno = false } = {}) {
 // Telemetría de edición: por qué vía se resolvió cada intento. Sin esto,
 // «la edición falla» no es accionable — no sabes si el modelo cita mal, si
 // cita ambiguo o si no encuentra el sitio.
+// Un fichero binario (una imagen, un sonido o un vídeo de las herramientas de medios) dentro del proyecto. Pasa por la
+// misma aprobación que una escritura (en modo Revisar, el usuario lo ve y decide), con una línea que dice qué es en
+// vez de un diff. No pisa un fichero de texto con cuerpo por accidente: si ya existe, solo se reemplaza con aprobación.
+export async function writeBlob({ path, blob } = {}) {
+  if (!path) throw new Error('Falta path');
+  if (!(blob instanceof Blob)) throw new Error('No hay fichero que guardar');
+  if (!await approveWrite(path, `[${blob.type || 'binario'} · ${blob.size} bytes]`)) return `Guardar ${path} rechazado por el usuario`;
+  const { dir, name } = await dirOf(path, { create: true });
+  const fh = await dir.getFileHandle(name, { create: true });
+  const w = await fh.createWritable();
+  await w.write(blob);
+  await w.close();
+  invalidateFileList();
+  return `Guardado en ${path} (${blob.size} bytes).`;
+}
+
 export const editStats = { total: 0, exacta: 0, bloque: 0, nucleo: 0, difusa: 0, ambigua: 0, noEncontrado: 0, sinCambio: 0, noExiste: 0, rompeSintaxis: 0, yaAplicado: 0, truncaria: 0, detalle: [] };
 export function resetEditStats() {
   editStats.total = editStats.exacta = editStats.bloque = editStats.nucleo = editStats.difusa = 0;

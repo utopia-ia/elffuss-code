@@ -88,6 +88,9 @@ fi
 # comprobarlo, no se despliega.
 ./sync-memoria.sh --revisa || { echo "✗ la config de la memoria no es la de Claw. No se ha subido nada." >&2; exit 1; }
 
+# El SDK de medios (web/vendor/elffuss-ai/) viaja con la web: sus runtimes no están en git, los restaura ai-sync.mjs
+# desde su PIN.json, y aquí se comprueban byte a byte antes de subir nada.
+node ai-sync.mjs --check || { echo "✗ web/vendor/elffuss-ai no casa con su PIN.json: node ai-sync.mjs (con ELFFUSS_AI_REPO)" >&2; exit 1; }
 rsync -az --delete --filter='P blog/***' --filter='P __e4b.litertlm' --exclude='__e4b.litertlm' "${MOTOR[@]}" "${VENDOR[@]}" -e "ssh -i $KEY" web/ "$HOST:$DEST/"
 
 # Con el motor, comprobar lo que el SERVIDOR tiene de verdad: --revisa solo lee

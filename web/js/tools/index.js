@@ -5,6 +5,8 @@ import * as web from './web.js';
 import { anunciar, tocaFichero } from '../actividad.js';
 import { entradas as memoryEntradas } from './memory.js';
 import { alRegistrarHerramientas, hoy } from '../memory-wire.js';
+import { mediaToolEntries, MEDIA_ALIASES } from './media.js';
+import { uiLang } from '../i18n.js';
 
 export { code };
 
@@ -22,6 +24,9 @@ export const TOOLS = {
   'terminal.run': { desc: 'Ejecutar un comando de shell sobre los ficheros del proyecto (ls, cat, grep, find, mkdir, echo>fichero, git status…). node/npm/python REALES si el usuario tiene un Bridge local conectado (⚙ Ajustes → 🔌 Bridge local); si no está conectado, el propio resultado lo indica', params: { command: 'la línea de comando' }, run: async (a, ctx = {}) => { const out = await shell.runForAgent(a.command || '', { signal: ctx.signal }); onTerminalEcho(a.command || '', out); return out; } },
   'web.search': { desc: 'Buscar en internet (docs, errores, APIs) — devuelve títulos, URLs y fragmentos', params: { query: 'qué buscar' }, run: a => web.search(a) },
   'web.fetch':  { desc: 'Leer el contenido de texto de una URL (documentación, referencia)', params: { url: 'https://…' }, run: a => web.fetchUrl(a) },
+  // Imagen, música, voz y vídeo, hechos en este navegador con el SDK de elffuss-ai (tools/media.js); con `path`, el
+  // fichero se guarda además en el proyecto. La descripción es la del chat de elffuss.com: el prompt va en inglés.
+  ...mediaToolEntries(uiLang() === 'es' ? 'es' : 'en'),
 };
 
 // Memoria compartida: memory-wire.js registra aquí las tres herramientas del
@@ -68,6 +73,8 @@ export function toolHelp() {
 // `ctx` lo pone el agente: hoy, la señal de parada de su turno ({ signal }), que
 // terminal.run pasa al bridge para matar el comando si se para el agente.
 export async function runTool(name, args, ctx = {}) {
+  // Otros nombres que un modelo usa para las herramientas de medios (generate_image, tts…).
+  if (!TOOLS[name] && Object.hasOwn(MEDIA_ALIASES, name)) name = MEDIA_ALIASES[name];
   const tool = TOOLS[name];
   if (!tool) throw new Error(`Herramienta desconocida: ${name}`);
   // Se anuncia para que la vista de ciudad y su pila lo vean en directo. Si la

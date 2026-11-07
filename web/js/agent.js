@@ -3,6 +3,8 @@ import { runTool, toolHelp, snapshotDetalle, PARAM_EXACTO, PARAM_NUMERO } from '
 import { skillsPromptBlock } from './skills.js';
 import * as telemetry from './telemetry.js';
 import * as memoria from './memory-wire.js';
+import { isMediaTool, MEDIA_ALIASES } from './tools/media.js';
+import { mediaRule, MEDIA_KEYS } from './tools/media-tools.js';
 
 const MAX_STEPS = 12; // margen para tareas largas (leer→editar→verificar→arreglar…)
 
@@ -71,8 +73,9 @@ REGLAS DURAS:
 - Antes de decir NADA sobre el código, LÉELO con code.read o code.search. PROHIBIDO dar consejos genéricos o suposiciones ("probablemente usas React/Docker…"). Si no lo has leído, léelo primero.
 - ANTIRRECITACIÓN: aunque RECONOZCAS el proyecto por su nombre (vllm, react, django, next, pytorch…), tienes PROHIBIDO describirlo de memoria («csrc/ es C++/CUDA», «benchmarks/ mide rendimiento»…). Esta copia local puede diferir de lo que crees saber. Descríbelo SOLO por lo que leas AQUÍ con las herramientas.
 - Si te preguntan «¿qué hace este código/proyecto?» y no has leído nada aún, tu PRIMERA respuesta debe ser una tool-call (code.tree o code.read del README/entrypoint), NUNCA una descripción. Encadena 2-3 lecturas (README + fichero de entrada + un módulo clave) antes de resumir. Nada de listar carpetas de forma genérica.
-- USA SOLO code.tree / code.read / code.run / code.edit / code.write / code.search / terminal.run / web.search / web.fetch${memUsa}. NO existen code.create-plugin, code.create-mcp-server, hooks, CLAUDE.conf ni nada parecido: si lo mencionas, estás alucinando.
+- USA SOLO code.tree / code.read / code.run / code.edit / code.write / code.search / terminal.run / web.search / web.fetch / image.generate / audio.music / audio.sfx / audio.speak / video.animate / video.generate${memUsa}. NO existen code.create-plugin, code.create-mcp-server, hooks, CLAUDE.conf ni nada parecido: si lo mencionas, estás alucinando.
 - ⛔ NUNCA recomiendes «automatizaciones de agentes de terceros»: MCP servers (context7, «claude mcp add …»), skills, hooks (.claude/settings.json, pre-commit), subagentes (.claude/agents/…), plugins, CLAUDE.conf. NADA de eso existe en este IDE — es conocimiento de tu entrenamiento, no de este proyecto. Si te descubres escribiendo «Recomendaciones de automatización», «MCP Servers», «Skills», «Hooks», «Subagentes» → PARA: es pura alucinación. Ayuda con el CÓDIGO REAL que lees, nada más.
+- Imágenes, música, efectos, voz y vídeo (para el proyecto: un icono, un fondo, un sonido) los haces con image.generate, audio.*, video.*: corren en este navegador. El prompt va en INGLÉS (salvo el texto de audio.speak, en el idioma del usuario); con path el fichero queda guardado en el proyecto (assets/…). ${mediaRule('es')}
 - web.search busca en internet DE SERIE (docs, mensajes de error, APIs) y web.fetch lee una URL. PUEDES buscar en internet cuando ayude; NUNCA digas que no puedes.
 - terminal.run ejecuta comandos de shell REALES (ls, cat, grep, find, mkdir, «echo texto > fichero», git status). Le pasas la LÍNEA DE COMANDO exacta, NUNCA lenguaje natural (mal: terminal.run "crea un proyecto"; bien: terminal.run "mkdir web"). rm SÍ soporta comodines («rm carpeta/mejoras-*.md» borra todos los que coincidan) — si «no existe», es que de verdad no hay ninguno, no lo des por hecho sin comprobarlo con ls/find antes. «node» es real si el usuario tiene el Bridge local conectado (⚙ Ajustes → 🔌 Bridge local) — pruébalo con terminal.run y lee el resultado; si el bridge no está conectado, la propia herramienta te lo dice, y ENTONCES le pides que lo conecte (no lo asumas sin probar). ⛔ Y NUNCA instales nada: «pip install», «npm install», «brew», «apt» están PROHIBIDOS, ni siquiera «para ver si está». Instalar es cambiarle la máquina al usuario sin que lo pida, y además aquí no hace falta.
 - EL LENGUAJE DE ESTA CASA ES JAVASCRIPT. Para transformar, calcular o automatizar cualquier cosa: JavaScript. Si el trabajo necesita leer un fichero grande o binario, un script .mjs y terminal.run «node script.mjs». Python NO es un camino aquí: no lo propongas, no lo pruebes y no preguntes si está. Solo si el usuario pide Python EXPRESAMENTE, y entonces sin instalar nada.
@@ -222,7 +225,7 @@ function looseToolCall(raw) {
   const am = raw.match(/"args"\s*:\s*\{/);
   const body = am ? raw.slice(am.index + am[0].length) : raw;
   const args = {};
-  for (const key of ['path', 'content', 'search', 'replace', 'query', 'ext', 'command']) {
+  for (const key of new Set(['path', 'content', 'search', 'replace', 'query', 'ext', 'command', ...MEDIA_KEYS])) {
     const km = body.match(new RegExp('"' + key + '"\\s*:\\s*"'));
     if (!km) continue;
     // El cierre REAL se elige mirando todos los candidatos y quedándose con el
@@ -253,7 +256,7 @@ function looseToolCall(raw) {
     try { val = JSON.parse('"' + val.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t') + '"'); } catch { /* crudo */ }
     args[key] = val;
   }
-  for (const key of ['offset', 'limit', 'around', 'depth']) {
+  for (const key of ['offset', 'limit', 'around', 'depth', 'seconds', 'seed', 'steps']) {
     const nm = body.match(new RegExp('"' + key + '"\\s*:\\s*(-?\\d+(?:\\.\\d+)?)'));
     if (nm) args[key] = Number(nm[1]);
   }
@@ -510,23 +513,26 @@ export class Agent {
   // `typed`: el mensaje lo ESCRIBIÓ el usuario en la caja (ni pegado, ni
   // adjuntos, ni una tarea del modo Objetivo o del cerebro). Solo eso puede
   // sostener un recuerdo (memoria compartida, memory-wire.js).
-  async handle(userText, onEvent, { signal: externa = null, typed = false } = {}) {
+  // `context`/`attach`: lo adjuntado al mensaje (media-ui.js). El modelo lee `context` delante del mensaje; un mensaje
+  // con adjuntos no cuenta como escrito para la memoria (el texto de un documento no es palabra del usuario).
+  async handle(userText, onEvent, { signal: externa = null, typed = false, context = '', attach = null } = {}) {
     const aborter = (this._aborter = new AbortController());
     // Ya parado antes de empezar: ni se apunta el mensaje en el historial ni se
     // llama al modelo.
     if (externa?.aborted) { onEvent({ type: 'aborted', text: '(Parado.)' }); return; }
     const enlazar = () => aborter.abort();
     externa?.addEventListener('abort', enlazar, { once: true });
-    try { return await this._turno(userText, onEvent, aborter.signal, typed === true); }
+    try { return await this._turno(userText, onEvent, aborter.signal, typed === true && !context, { context, attach }); }
     finally { externa?.removeEventListener('abort', enlazar); }
   }
 
-  async _turno(userText, onEvent, signal, typed = false) {
+  async _turno(userText, onEvent, signal, typed = false, { context: adjunto = '', attach = null } = {}) {
     // La marca temporal se pone AL AÑADIR, que es el único momento en que se
     // sabe: el gestor de contexto resuelve «ayer» con la fecha del turno en que
     // se dijo, no con la de ahora (ver annotateDates en acer-core.js). Sin esto
     // la anotación se calla, que es lo correcto, pero no sirve para nada.
-    this.history.push({ role: 'user', content: userText, ts: Date.now(), ...(typed ? { typed: true } : {}) });
+    if (adjunto) this.history.push({ role: 'user', content: `${adjunto}\n\n${userText || '(adjunto)'}`, shown: userText, attach, ts: Date.now() });
+    else this.history.push({ role: 'user', content: userText, ts: Date.now(), ...(typed ? { typed: true } : {}) });
     // Memoria compartida: UNA consulta por turno, antes del primer paso. El
     // bloque se reutiliza tal cual en cada paso (solo se rehace tras guardar) y
     // va en el mensaje de estado, no en el prompt de sistema, para no romper el
@@ -593,6 +599,7 @@ export class Agent {
       const results = [];
       for (const call of calls) {
         if (signal.aborted) { onEvent({ type: 'aborted', text: '(Parado.)' }); return; }
+        if (Object.hasOwn(MEDIA_ALIASES, call.tool)) call.tool = MEDIA_ALIASES[call.tool];
         onEvent({ type: 'tool', call });
         let result;
         // La señal llega también a la herramienta: un comando largo en el bridge
@@ -615,6 +622,16 @@ export class Agent {
         results.push(`[resultado ${call.tool}]\n${resultStr}${pista}`);
       }
       this.history.push({ role: 'user', content: results.join('\n\n'), ts: Date.now() });
+      // Una imagen, un audio o un vídeo hecho (o que aquí no se puede, o la descarga denegada): la tarjeta es la
+      // respuesta y el turno acaba sin otro paso del modelo.
+      const deMedios = calls.filter((c) => isMediaTool(c.tool));
+      if (deMedios.length && deMedios.length === calls.length && !results.some((r) => /\]\nERROR/.test(r))) {
+        const hecho = results.some((r) => /\b(img|aud|vid)-[a-z2-9]{4}\b/.test(r));
+        const texto = hecho ? 'Hecho: está en la tarjeta de arriba, con su botón para descargarlo.' : results[results.length - 1].replace(/^\[resultado [^\]]+\]\n/, '');
+        this.history.push({ role: 'assistant', content: texto, ts: Date.now() });
+        onEvent({ type: 'text', text: texto });
+        return;
+      }
     }
     // Agotar los pasos es un FALLO y hay que decirlo con un evento propio: el
     // modo Objetivo marcaba la tarea como hecha porque solo miraba 'error', y

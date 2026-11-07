@@ -26,3 +26,6 @@ vendor/vscode-ext2/node_modules/
 vendor/vscode-ext2/.build/
 vendor/vscode-ext2/.repro/
 tests/.cache/
+
+# media SDK runtimes: restored by ai-sync.mjs from web/vendor/elffuss-ai/PIN.json, checked byte for byte
+web/vendor/elffuss-ai/runtimes/
