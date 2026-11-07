@@ -298,6 +298,10 @@ export async function empezarTurno({ history, conv = null, alTarjeta = () => {} 
     return { text: r.text || '', tokens: r.tokens || 0, facts: r.facts || [], unavailable: !!r.unavailable };
   };
   let bloque = await pedir().catch(() => ({ text: '', tokens: 0, facts: [] }));
+  // El cliente del motor se rinde si la página almacén no contesta en su espera, medida con el reloj; una página ocupada
+  // más que eso (un modelo cargando) cuenta como sin respuesta aunque el marco conteste justo después (medido en Chrome
+  // y WebKit con una tarea larga de 9 s). Se pregunta una vez más, al momento, y contesta.
+  if (bloque.unavailable && !incognito && !caida) bloque = await pedir().catch(() => ({ text: '', tokens: 0, facts: [], unavailable: true }));
   // La página almacén sin contestar es un estado del botón de Ajustes, nunca una tarjeta en la conversación (en el
   // chat de elffuss.com, Kiko: «queda muy feo»). Se reintenta sola en segundo plano (ver estadoCaida).
   if (!incognito) marcarCaida(!!bloque.unavailable);
