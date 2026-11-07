@@ -22,8 +22,8 @@ export const TOOLS = {
   'code.run':    { desc: 'EJECUTAR una expresión contra un módulo JS del proyecto y ver qué devuelve de verdad. Úsalo SIEMPRE después de arreglar algo, para comprobar que el arreglo funciona antes de darlo por bueno: code.run con path del fichero y expr como "max([])" — las funciones exportadas se llaman por su nombre a secas, sin import ni require (también valen como m.max). Corre aislado y con límite de tiempo', params: { path: 'ruta del .js', expr: 'expresión a evaluar, p.ej. m.suma(2,3)' }, run: a => code.run(a) },
   'code.search': { desc: 'Buscar texto en el proyecto (grep)', params: { query: 'texto', ext: 'filtro extensión (opcional)' }, run: a => code.search(a) },
   'terminal.run': { desc: 'Ejecutar un comando de shell sobre los ficheros del proyecto (ls, cat, grep, find, mkdir, echo>fichero, git status…). node/npm/python REALES si el usuario tiene un Bridge local conectado (⚙ Ajustes → 🔌 Bridge local); si no está conectado, el propio resultado lo indica', params: { command: 'la línea de comando' }, run: async (a, ctx = {}) => { const out = await shell.runForAgent(a.command || '', { signal: ctx.signal }); onTerminalEcho(a.command || '', out); return out; } },
-  'web.search': { desc: 'Buscar en internet (docs, errores, APIs) — devuelve títulos, URLs y fragmentos', params: { query: 'qué buscar' }, run: a => web.search(a) },
-  'web.fetch':  { desc: 'Leer el contenido de texto de una URL (documentación, referencia)', params: { url: 'https://…' }, run: a => web.fetchUrl(a) },
+  'web.search': { desc: 'Buscar en internet (docs, errores, APIs; site:dominio en la búsqueda la limita a una web; no pongas años que el usuario no dijo) — devuelve títulos, URLs, fragmentos y lo que dicen las primeras páginas', params: { query: 'qué buscar' }, run: (a, ctx) => web.search(a, ctx) },
+  'web.fetch':  { desc: 'Leer una URL (documentación, referencia): devuelve sus partes que responden a la pregunta', params: { url: 'https://…' }, run: (a, ctx) => web.fetchUrl(a, ctx) },
   // Imagen, música, voz y vídeo, hechos en este navegador con el SDK de elffuss-ai (tools/media.js); con `path`, el
   // fichero se guarda además en el proyecto. La descripción es la del chat de elffuss.com: el prompt va en inglés.
   ...mediaToolEntries(uiLang() === 'es' ? 'es' : 'en'),
@@ -77,6 +77,8 @@ export function toolHelp({ medios = false } = {}) {
 export async function runTool(name, args, ctx = {}) {
   // Otros nombres que un modelo usa para las herramientas de medios (generate_image, tts…).
   if (!TOOLS[name] && Object.hasOwn(MEDIA_ALIASES, name)) name = MEDIA_ALIASES[name];
+  // Buscar dentro de una web no es una herramienta aparte: web.search con site: (tools/web.js lo monta con la url).
+  if (!TOOLS[name] && /^(web\.site|web\.site_search|web\.search_site|site_search|search_site|web_site)$/.test(name)) name = 'web.search';
   const tool = TOOLS[name];
   if (!tool) throw new Error(`Herramienta desconocida: ${name}`);
   // Se anuncia para que la vista de ciudad y su pila lo vean en directo. Si la

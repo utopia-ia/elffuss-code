@@ -612,7 +612,8 @@ export class Agent {
         // Un dato de la memoria no sale del navegador por web.* ni terminal.run
         // en un turno con texto de otros (memory-wire.js filtraMemoria).
         if (mt?.filtra(call.tool, call.args)) result = memoria.AVISO_FILTRA;
-        else try { result = await runTool(call.tool, call.args, { signal, memoria: mt }); }
+        // `question`: lo que escribió el usuario, para que web.* ordene aquí los párrafos de lo que lee (no sale).
+        else try { result = await runTool(call.tool, call.args, { signal, memoria: mt, question: userText }); }
         catch (e) {
           if (signal.aborted) { onEvent({ type: 'aborted', text: '(Parado.)' }); return; }
           result = 'ERROR: ' + e.message; onEvent({ type: 'tool_error', tool: call.tool, text: e.message });
