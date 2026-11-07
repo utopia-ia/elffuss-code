@@ -183,5 +183,24 @@ ok('20 · un mensaje truncado de verdad NO se recupera',
    call('```tool\n{"tool": "code.write", "args": {"path": "a.js", "content": "empieza y se corta').length === 0,
    `${call('```tool\n{"tool": "code.write", "args": {"path": "a.js", "content": "empieza y se corta').length} llamadas`);
 
+// Forma de LFM3 (el modelo por defecto desde el 2-nov-2026), tal cual la escribe su plantilla.
+cs = call('<tool_call>\n<function=code.read>\n<parameter=path>\nbin/main.js\n</parameter>\n</function>\n</tool_call>');
+ok('21 · LFM3: <function=…><parameter=…> se ejecuta',
+   cs.length === 1 && cs[0].tool === 'code.read' && cs[0].args.path === 'bin/main.js', ver(cs));
+
+const L3 = 'export const a = 1\n';
+cs = call(`<tool_call>\n<function=code.write>\n<parameter=path>\nsrc/a.js\n</parameter>\n<parameter=content>\n${L3}\n</parameter>\n</function>\n</tool_call>`);
+ok('22 · LFM3: el contenido sale exacto (sin los dos saltos de la plantilla)',
+   cs[0]?.args?.content === L3, ver(cs[0]?.args?.content));
+
+cs = call('<tool_call>\n<function=code.read>\n<parameter=path>\na.js\n</parameter>\n<parameter=offset>\n10\n</parameter>\n</function>\n</tool_call>');
+ok('23 · LFM3: un parámetro numérico llega como número', cs[0]?.args?.offset === 10, ver(cs[0]?.args));
+
+cs = call('<tool_call>\n<function=code.read>\n<parameter=path>\na.js\n</parameter>\n</function>\n</tool_call>\n<tool_call>\n<function=code.read>\n<parameter=path>\nb.js\n</parameter>\n</function>\n</tool_call>');
+ok('24 · LFM3: dos llamadas, en orden', cs.map(x => x.args.path).join() === 'a.js,b.js', ver(cs));
+
+cs = call('<tool_call>\n<function=code.write>\n<parameter=path>\na.js\n</parameter>\n<parameter=content>\nse corta');
+ok('25 · LFM3: una llamada sin cerrar NO se ejecuta', cs.length === 0, ver(cs));
+
 console.log(fallos ? `\n❌ ${fallos} FALLO(S)` : '\n✅ las etiquetas <function> no estropean lo que escribe el modelo');
 process.exit(fallos ? 1 : 0);
