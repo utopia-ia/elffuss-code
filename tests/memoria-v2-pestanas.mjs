@@ -19,9 +19,12 @@
 // que lo escribe y la otra lo vuelve a leer.
 const bases = new Map();
 const copia = (v) => (Array.isArray(v) ? v.map((o) => (o && typeof o === 'object' ? { ...o } : o)) : v);
-const peticion = (fn) => {
+// Como en IndexedDB, la transacción termina (oncomplete) después del éxito de su petición: db.js resuelve entonces.
+const peticion = (fn, t) => {
   const r = {};
-  setTimeout(() => { try { r.result = fn(); r.onsuccess?.(); } catch (e) { r.error = e; r.onerror?.(); } }, 0);
+  setTimeout(() => {
+    try { r.result = fn(); r.onsuccess?.(); setTimeout(() => t?.oncomplete?.(), 0); } catch (e) { r.error = e; r.onerror?.(); setTimeout(() => t?.onabort?.(), 0); }
+  }, 0);
   return r;
 };
 globalThis.indexedDB = {
@@ -34,16 +37,19 @@ globalThis.indexedDB = {
       r.result = {
         objectStoreNames: { contains: (s) => stores.has(s) },
         createObjectStore: (s) => stores.set(s, new Map()),
-        transaction: (s) => ({
-          objectStore: () => {
-            const m = stores.get(s);
-            return {
-              get: (k) => peticion(() => copia(m.get(k))),
-              put: (v, k) => peticion(() => { m.set(k, copia(v)); }),
-              delete: (k) => peticion(() => { m.delete(k); }),
-            };
-          },
-        }),
+        transaction: (s) => {
+          const t = {
+            objectStore: () => {
+              const m = stores.get(s);
+              return {
+                get: (k) => peticion(() => copia(m.get(k)), t),
+                put: (v, k) => peticion(() => { m.set(k, copia(v)); }, t),
+                delete: (k) => peticion(() => { m.delete(k); }, t),
+              };
+            },
+          };
+          return t;
+        },
       };
       if (nueva) r.onupgradeneeded?.();
       r.onsuccess?.();
