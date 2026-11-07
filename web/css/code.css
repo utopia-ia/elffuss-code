@@ -877,3 +877,7 @@ body.chat-full #chat { border-left: none; }
 .att-line { color: var(--muted); font-size: .75rem; }
 .att-card .media-el { display: block; max-width: min(16rem, 100%); max-height: 14rem; border-radius: 8px; }
 .att-card audio.media-el { width: 15rem; }
+
+/* «Hecho con amor en Málaga», al pie de la portada: los colores del Málaga CF con la hoja de Elffuss. */
+#landing .made-in { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 4px 0 0; font-size: 12px; color: var(--muted); }
+.made-in-flag { width: 24px; height: 16px; flex: none; border-radius: 2px; box-shadow: 0 0 0 1px rgb(0 0 0 / 0.12); }

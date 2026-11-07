@@ -166,6 +166,7 @@ const L = {
     openFolderFailed: "No pude abrir la carpeta: {e}", openingIde: "Abriendo el editor…",
     noFsAccess: "Este navegador no deja abrir carpetas de tu disco (hace falta Chrome o Edge en un ordenador). Puedes probar con una carpeta privada del navegador.",
     tryBrowser: "Probar en el navegador (sin carpeta)",
+    madeIn: "Hecho con amor en Málaga",
     clonePasteUrl: "Pega la URL de un repo público de GitHub o Bitbucket.",
     cloneBadUrl: "URL no reconocida. Usa github.com/usuario/repo o bitbucket.org/usuario/repo",
     cloneListing: "Listando el repo…", cloneHalf: "Descarga a medias de {repo} ({n}/{total} ficheros)",
@@ -434,6 +435,7 @@ const L = {
     openFolderFailed: "Couldn't open the folder: {e}", openingIde: "Opening the editor…",
     noFsAccess: "This browser can't open folders on your disk (you need Chrome or Edge on a computer). You can try a private folder inside the browser.",
     tryBrowser: "Try it in the browser (no folder)",
+    madeIn: "Made with love in Málaga",
     clonePasteUrl: "Paste the URL of a public GitHub or Bitbucket repo.",
     cloneBadUrl: "Unrecognised URL. Use github.com/user/repo or bitbucket.org/user/repo",
     cloneListing: "Listing the repo…", cloneHalf: "Half-finished download of {repo} ({n}/{total} files)",
@@ -569,6 +571,7 @@ export function applyI18n() {
   set('#clone-btn', 'textContent', 'cloneOpen');
   set('#clone-url', 'placeholder', 'clonePh');
   set('#try-browser', 'textContent', 'tryBrowser');
+  set('#landing .made-in-txt', 'textContent', 'madeIn');
   set('#term-clear', 'textContent', 'termClear');
   set('#pal-input', 'placeholder', 'searchPh');
   set('#top-search .ts-txt', 'textContent', 'tSearchBar');
