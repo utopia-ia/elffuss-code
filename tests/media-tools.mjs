@@ -77,7 +77,7 @@ const scripted = () => {
       const last = real[real.length - 1];
       if (last.role === 'user' && last.content.startsWith('[resultado')) return 'Hecho.';
       const all = history.map((m) => m.content).join('\n');
-      const u = last.content.replace(/\n\n\(adjunto\)$/, '').replace(/^\[(?:document|documento) [\s\S]*?\[(?:end of document|fin del documento)\]\s*/g, '').replace(/^(\[(?:attached|adjunto|nota de voz|voice note)[^\]]*\]\s*)+/, '');
+      const u = last.content.replace(/\n\n\(adjunto\)$/, '').replace(/^\[(?:document|documento) [\s\S]*?\[(?:end of document|fin del documento)\]\s*/g, '').replace(/^(\[(?:attached|adjunto|nota de voz|voice note)[^\]]*\](?:\s*\((?:sin mirar todavía|not looked at yet)[^)]*\))?\s*)+/, '');
       if (/^\[imgplus\]/.test(u)) return call('image.generate', { prompt: 'a fox' }) + '\n' + call('code.write', { path: 'zorro.html', content: '<img src="img-abcd">' });
       if (/^\[img\]/.test(u)) return call('image.generate', { prompt: 'a red fox in the snow', aspect: '16:9' });
       if (/^\[imgpath\]/.test(u)) return call('image.generate', { prompt: 'a small fox icon', path: 'assets/zorro.png' });
