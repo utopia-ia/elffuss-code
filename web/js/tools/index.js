@@ -5,7 +5,7 @@ import * as web from './web.js';
 import { anunciar, tocaFichero } from '../actividad.js';
 import { entradas as memoryEntradas } from './memory.js';
 import { alRegistrarHerramientas, hoy } from '../memory-wire.js';
-import { mediaToolEntries, MEDIA_ALIASES } from './media.js';
+import { mediaToolEntries, MEDIA_ALIASES, isMediaTool } from './media.js';
 import { uiLang } from '../i18n.js';
 
 export { code };
@@ -65,8 +65,10 @@ export const PARAM_NUMERO = {
   'code.read': ['offset', 'limit', 'around'],
 };
 
-export function toolHelp() {
-  return Object.entries(TOOLS).map(([n, t]) =>
+// `medios`: las herramientas de imagen, audio y vídeo entran en el catálogo solo en los turnos que las necesitan
+// (tools/media-intent.js). Sin ellas el catálogo es el de antes, byte a byte.
+export function toolHelp({ medios = false } = {}) {
+  return Object.entries(TOOLS).filter(([n]) => medios || !isMediaTool(n)).map(([n, t]) =>
     `- ${n}(${Object.keys(t.params).join(', ')}): ${t.desc}`).join('\n');
 }
 

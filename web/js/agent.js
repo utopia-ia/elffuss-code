@@ -5,6 +5,7 @@ import * as telemetry from './telemetry.js';
 import * as memoria from './memory-wire.js';
 import { isMediaTool, MEDIA_ALIASES } from './tools/media.js';
 import { mediaRule, MEDIA_KEYS } from './tools/media-tools.js';
+import { needsMediaTools, hasMediaIn } from './tools/media-intent.js';
 
 const MAX_STEPS = 12; // margen para tareas largas (leer→editar→verificar→arreglar…)
 
@@ -18,7 +19,9 @@ export function userLang() {
   return { code: codeL, name: LANGS[codeL.split('-')[0]] || codeL };
 }
 
-export function systemPrompt(context = '') {
+// `medios`: este turno lleva las herramientas de imagen, audio y vídeo y su regla (tools/media-intent.js lo decide
+// antes del turno, sin modelo). Sin ellas el prompt es el de antes, byte a byte, y el prefijo se reutiliza.
+export function systemPrompt(context = '', { medios = false } = {}) {
   const lang = userLang();
 
   // Versión corta para modelos LENTOS, que no es lo mismo que modelos pequeños:
@@ -67,16 +70,16 @@ Tú:
   return `Eres Elffuss Code: un asistente de programación, cálido pero quirúrgico con el código. Vives en un IDE web y trabajas SOLO dentro del proyecto que el usuario ha abierto. Hablas SIEMPRE en el idioma del navegador del usuario: ${lang.name} (${lang.code}); el código y sus comentarios, en el estilo del proyecto.
 
 HERRAMIENTAS (las ÚNICAS que existen — no inventes otras):
-${toolHelp()}
+${toolHelp({ medios })}
 
 REGLAS DURAS:
 - Antes de decir NADA sobre el código, LÉELO con code.read o code.search. PROHIBIDO dar consejos genéricos o suposiciones ("probablemente usas React/Docker…"). Si no lo has leído, léelo primero.
 - ANTIRRECITACIÓN: aunque RECONOZCAS el proyecto por su nombre (vllm, react, django, next, pytorch…), tienes PROHIBIDO describirlo de memoria («csrc/ es C++/CUDA», «benchmarks/ mide rendimiento»…). Esta copia local puede diferir de lo que crees saber. Descríbelo SOLO por lo que leas AQUÍ con las herramientas.
 - Si te preguntan «¿qué hace este código/proyecto?» y no has leído nada aún, tu PRIMERA respuesta debe ser una tool-call (code.tree o code.read del README/entrypoint), NUNCA una descripción. Encadena 2-3 lecturas (README + fichero de entrada + un módulo clave) antes de resumir. Nada de listar carpetas de forma genérica.
-- USA SOLO code.tree / code.read / code.run / code.edit / code.write / code.search / terminal.run / web.search / web.fetch / image.generate / audio.music / audio.sfx / audio.speak / video.animate / video.generate${memUsa}. NO existen code.create-plugin, code.create-mcp-server, hooks, CLAUDE.conf ni nada parecido: si lo mencionas, estás alucinando.
+- USA SOLO code.tree / code.read / code.run / code.edit / code.write / code.search / terminal.run / web.search / web.fetch${medios ? ' / image.generate / audio.music / audio.sfx / audio.speak / video.animate / video.generate' : ''}${memUsa}. NO existen code.create-plugin, code.create-mcp-server, hooks, CLAUDE.conf ni nada parecido: si lo mencionas, estás alucinando.
 - ⛔ NUNCA recomiendes «automatizaciones de agentes de terceros»: MCP servers (context7, «claude mcp add …»), skills, hooks (.claude/settings.json, pre-commit), subagentes (.claude/agents/…), plugins, CLAUDE.conf. NADA de eso existe en este IDE — es conocimiento de tu entrenamiento, no de este proyecto. Si te descubres escribiendo «Recomendaciones de automatización», «MCP Servers», «Skills», «Hooks», «Subagentes» → PARA: es pura alucinación. Ayuda con el CÓDIGO REAL que lees, nada más.
-- Imágenes, música, efectos, voz y vídeo (para el proyecto: un icono, un fondo, un sonido) los haces con image.generate, audio.*, video.*: corren en este navegador. El prompt va en INGLÉS (salvo el texto de audio.speak, en el idioma del usuario); con path el fichero queda guardado en el proyecto (assets/…). ${mediaRule('es')}
-- web.search busca en internet DE SERIE (docs, mensajes de error, APIs) y web.fetch lee una URL. PUEDES buscar en internet cuando ayude; NUNCA digas que no puedes.
+${medios ? `- Imágenes, música, efectos, voz y vídeo (para el proyecto: un icono, un fondo, un sonido) los haces con image.generate, audio.*, video.*: corren en este navegador. El prompt va en INGLÉS (salvo el texto de audio.speak, en el idioma del usuario); con path el fichero queda guardado en el proyecto (assets/…). ${mediaRule('es')}
+` : ''}- web.search busca en internet DE SERIE (docs, mensajes de error, APIs) y web.fetch lee una URL. PUEDES buscar en internet cuando ayude; NUNCA digas que no puedes.
 - terminal.run ejecuta comandos de shell REALES (ls, cat, grep, find, mkdir, «echo texto > fichero», git status). Le pasas la LÍNEA DE COMANDO exacta, NUNCA lenguaje natural (mal: terminal.run "crea un proyecto"; bien: terminal.run "mkdir web"). rm SÍ soporta comodines («rm carpeta/mejoras-*.md» borra todos los que coincidan) — si «no existe», es que de verdad no hay ninguno, no lo des por hecho sin comprobarlo con ls/find antes. «node» es real si el usuario tiene el Bridge local conectado (⚙ Ajustes → 🔌 Bridge local) — pruébalo con terminal.run y lee el resultado; si el bridge no está conectado, la propia herramienta te lo dice, y ENTONCES le pides que lo conecte (no lo asumas sin probar). ⛔ Y NUNCA instales nada: «pip install», «npm install», «brew», «apt» están PROHIBIDOS, ni siquiera «para ver si está». Instalar es cambiarle la máquina al usuario sin que lo pida, y además aquí no hace falta.
 - EL LENGUAJE DE ESTA CASA ES JAVASCRIPT. Para transformar, calcular o automatizar cualquier cosa: JavaScript. Si el trabajo necesita leer un fichero grande o binario, un script .mjs y terminal.run «node script.mjs». Python NO es un camino aquí: no lo propongas, no lo pruebes y no preguntes si está. Solo si el usuario pide Python EXPRESAMENTE, y entonces sin instalar nada.
 - TRANSFORMAR o CALCULAR sobre un fichero (escalar un modelo 3D, convertir un CSV, recortar, renombrar en lote) se hace AQUÍ y con lo que hay. PROHIBIDO contestar «mis herramientas son solo código, texto y comandos de shell» y concluir de ahí que no puedes: un fichero son BYTES, y estas herramientas leen y escriben bytes. Dos caminos, y ninguno necesita instalar nada:
@@ -541,6 +544,8 @@ export class Agent {
       history: this.history, conv: this.convId || null,
       alTarjeta: ev => { if (!signal.aborted) onEvent(ev); },
     }).catch(() => null);
+    // Las herramientas de medios, solo si este turno las necesita (un adjunto, un medio nombrado, o que pida hacer uno).
+    const medios = needsMediaTools(userText, { attachments: attach?.length || 0, hasMedia: hasMediaIn(this.history.map((m) => m.content).join('\n')) }).media;
     for (let step = 0; step < MAX_STEPS; step++) {
       let out;
       try {
@@ -571,7 +576,7 @@ export class Agent {
         // declara y lo recibe. A los demás les llega la señal sola, como antes.
         const reserva = this.provider.memoriaFueraDelHistorial?.() ? (mt?.bloque?.tokens || 0) : 0;
         out = await this.provider.chat(conContexto(this.history, context, ETIQUETA_CONTEXTO),
-          systemPrompt(''),
+          systemPrompt('', { medios }),
           t => onEvent({ type: 'token', text: t }), reserva > 0 ? { signal, reserveTokens: reserva } : signal);
       } catch (e) {
         // Parar no es un fallo del modelo. Los proveedores que cortan de verdad
