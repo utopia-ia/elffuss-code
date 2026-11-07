@@ -78,6 +78,7 @@ const scripted = () => {
       if (last.role === 'user' && last.content.startsWith('[resultado')) return 'Hecho.';
       const all = history.map((m) => m.content).join('\n');
       const u = last.content.replace(/\n\n\(adjunto\)$/, '').replace(/^\[(?:document|documento) [\s\S]*?\[(?:end of document|fin del documento)\]\s*/g, '').replace(/^(\[(?:attached|adjunto|nota de voz|voice note)[^\]]*\]\s*)+/, '');
+      if (/^\[imgplus\]/.test(u)) return call('image.generate', { prompt: 'a fox' }) + '\n' + call('code.write', { path: 'zorro.html', content: '<img src="img-abcd">' });
       if (/^\[img\]/.test(u)) return call('image.generate', { prompt: 'a red fox in the snow', aspect: '16:9' });
       if (/^\[imgpath\]/.test(u)) return call('image.generate', { prompt: 'a small fox icon', path: 'assets/zorro.png' });
       if (/^\[speak\]/.test(u)) return call('audio.speak', { text: u.replace(/^\[speak\]\s*/, '') });
@@ -187,6 +188,12 @@ try {
   await decir('[speak] Hola, esto es una prueba');
   ok('audio.speak lleva el idioma del usuario', (await mediaLog()).find((x) => x.ev === 'run' && x.task === 'text-to-speech')?.input?.lang === 'es');
   ok('y deja una tarjeta de audio', await until(() => ultimaTarjeta().locator('audio.media-el').count().then((n) => n === 1)));
+
+  // 5c. Tras una imagen hecha no corre nada más en el turno, aunque el modelo pidiera otra herramienta en el mismo paso.
+  const nLlm = await p.evaluate(() => window.__llm.length);
+  await decir('[imgplus] hazme una imagen de un zorro');
+  ok('tras la imagen, el resto del paso no se ejecuta', !(await p.evaluate(() => JSON.stringify(window.elffussClaw.conv.getActive?.()?.history || window.__llm.at(-1)))).includes('[resultado code.write]'));
+  ok('y el turno acaba sin otro paso del modelo', (await p.evaluate(() => window.__llm.length)) === nLlm + 1);
 
   // 6. Recargar.
   await p.reload({ waitUntil: 'domcontentloaded' });

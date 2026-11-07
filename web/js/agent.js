@@ -602,6 +602,7 @@ export class Agent {
       // varios ficheros con contenido, no vacíos).
       this.history.push({ role: 'assistant', content: out, ts: Date.now() });
       const results = [];
+      let hechoMedio = false;
       for (const call of calls) {
         if (signal.aborted) { onEvent({ type: 'aborted', text: '(Parado.)' }); return; }
         if (Object.hasOwn(MEDIA_ALIASES, call.tool)) call.tool = MEDIA_ALIASES[call.tool];
@@ -626,12 +627,15 @@ export class Agent {
         const pista = resultStr.startsWith('ERROR')
           ? '\n(Reanaliza este error y reintenta con la corrección; no te rindas.)' : '';
         results.push(`[resultado ${call.tool}]\n${resultStr}${pista}`);
+        // Una imagen, un audio o un vídeo hecho: la tarjeta es la respuesta y en este turno no corre nada más (visto en
+        // elffuss.com: tras la imagen, el modelo la metía en una app). El resto de llamadas de este paso no se ejecuta.
+        if (isMediaTool(call.tool) && /\b(img|aud|vid)-[a-z2-9]{4}\b/.test(resultStr)) { hechoMedio = true; break; }
       }
       this.history.push({ role: 'user', content: results.join('\n\n'), ts: Date.now() });
       // Una imagen, un audio o un vídeo hecho (o que aquí no se puede, o la descarga denegada): la tarjeta es la
       // respuesta y el turno acaba sin otro paso del modelo.
       const deMedios = calls.filter((c) => isMediaTool(c.tool));
-      if (deMedios.length && deMedios.length === calls.length && !results.some((r) => /\]\nERROR/.test(r))) {
+      if (hechoMedio || (deMedios.length && deMedios.length === calls.length && !results.some((r) => /\]\nERROR/.test(r)))) {
         const hecho = results.some((r) => /\b(img|aud|vid)-[a-z2-9]{4}\b/.test(r));
         const texto = hecho ? 'Hecho: está en la tarjeta de arriba, con su botón para descargarlo.' : results[results.length - 1].replace(/^\[resultado [^\]]+\]\n/, '');
         this.history.push({ role: 'assistant', content: texto, ts: Date.now() });
