@@ -91,6 +91,10 @@ fi
 # El SDK de medios (web/vendor/elffuss-ai/) viaja con la web: sus runtimes no están en git, los restaura ai-sync.mjs
 # desde su PIN.json, y aquí se comprueban byte a byte antes de subir nada.
 node ai-sync.mjs --check || { echo "✗ web/vendor/elffuss-ai no casa con su PIN.json: node ai-sync.mjs (con ELFFUSS_AI_REPO)" >&2; exit 1; }
+# El código de terceros (web/vendor/third-party/) viaja con la web, fijado y comprobado: nada se carga de un CDN.
+node third-party.mjs --check || { echo "✗ web/vendor/third-party no casa con su PIN.json: node third-party.mjs --ensure" >&2; exit 1; }
+# Las cabeceras de seguridad (deploy/headers.json → deploy/nginx/): al día, y ninguna página carga código de otro origen.
+node deploy/headers.mjs --check || { echo "✗ deploy/nginx no está al día o la web carga código de otro origen: node deploy/headers.mjs --write" >&2; exit 1; }
 rsync -az --delete --filter='P blog/***' --filter='P __e4b.litertlm' --exclude='__e4b.litertlm' "${MOTOR[@]}" "${VENDOR[@]}" -e "ssh -i $KEY" web/ "$HOST:$DEST/"
 
 # Con el motor, comprobar lo que el SERVIDOR tiene de verdad: --revisa solo lee
