@@ -4,6 +4,7 @@ import * as db from './db.js';
 import { fileIcon, folderIcon } from './icons.js';
 import { renderMarkdown } from './md.js';
 import { t } from './i18n.js';
+import { setFrameHtml } from './sandbox-frame.js';
 
 let editor = null;
 let monacoRef = null;
@@ -28,14 +29,22 @@ const langOf = p => porNombre(p) || 'plaintext';
 const langDe = async (p, primeraLinea) => porNombre(p) || (ext && primeraLinea ? await ext.languageForFirstLine(primeraLinea) : null) || 'plaintext';
 const $ = id => document.getElementById(id);
 
+// Monaco fijado y servido desde este origen (web/vendor/third-party/, PIN.json): su cargador AMD, el editor y sus
+// workers (que, al ser del mismo origen, arrancan directamente, sin el truco de data: URL que usa desde un CDN).
+const MONACO = new URL('../vendor/third-party/monaco-editor@0.52.2/min/vs', import.meta.url).href;
+const MONACO_LOADER_SRI = 'sha384-pHG02SG8pId94Np3AbPmBEJ1yPqaH0IkJGLSNGXYmuGhkazT8Lr/57WYpbkGjJtu';
+
 export async function initEditor() {
+  // Sus workers, del mismo origen y por URL: sin esto Monaco los crea desde un blob: (lo que hace para poder
+  // servirse desde un CDN) y la política de Code (worker-src 'self') no lo deja.
+  self.MonacoEnvironment = { getWorkerUrl: (_moduleId, label) => `${MONACO}/base/worker/workerMain.js#${encodeURIComponent(label || '')}` };
   await new Promise(res => {
     const s = document.createElement('script');
-    s.src = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.js';
+    s.src = MONACO + '/loader.js'; s.integrity = MONACO_LOADER_SRI;
     s.onload = res;
     document.head.appendChild(s);
   });
-  window.require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs' } });
+  window.require.config({ paths: { vs: MONACO } });
   await new Promise(res => window.require(['vs/editor/editor.main'], res));
   monacoRef = window.monaco;
   ext = await loadExt(false);
@@ -220,8 +229,11 @@ async function applyView() {
       pane.replaceChildren();
       const frame = document.createElement('iframe');
       frame.sandbox = 'allow-scripts'; // sin allow-same-origin: aislado de tu proyecto real
-      frame.srcdoc = await inlineLocalAssets(tab.model.getValue(), tab.path);
+      // En /sandbox/run.html y no como srcdoc: un srcdoc hereda la CSP de Code (sin scripts en línea) y la vista
+      // previa no correría nada (js/sandbox-frame.js).
+      const html = await inlineLocalAssets(tab.model.getValue(), tab.path);
       pane.appendChild(frame);
+      setFrameHtml(frame, html);
     } else {
       pane.innerHTML = renderMarkdown(tab.model.getValue());
     }

@@ -1,7 +1,8 @@
 // Gramáticas TextMate de las extensiones, con el mismo motor que VS Code:
 // vscode-textmate + Oniguruma (WebAssembly). El motor va en el repositorio
-// (vendor/, el release/main.js de cada paquete sin cambios) y el WebAssembly se
-// baja del CDN con comprobación de integridad. Todo SOLO cuando un fichero
+// (vendor/, el release/main.js de cada paquete sin cambios) y el WebAssembly,
+// fijado y servido desde este origen (web/vendor/third-party/, PIN.json), con
+// comprobación de integridad. Todo SOLO cuando un fichero
 // necesita la primera gramática; sin extensiones de lenguaje no se carga nada.
 //
 // Los tokens van a Monaco en binario (tokenizeEncoded), igual que en VS Code:
@@ -14,7 +15,7 @@ import { NOMBRES_PROTO } from './formats.js';
 
 const TM_URL = './vendor/vscode-textmate@9.3.2/main.js';
 const ONIG_URL = './vendor/vscode-oniguruma@2.0.1/main.js';
-const WASM_URL = 'https://cdn.jsdelivr.net/npm/vscode-oniguruma@2.0.1/release/onig.wasm';
+const WASM_URL = new URL('../../vendor/third-party/vscode-oniguruma@2.0.1/release/onig.wasm', import.meta.url).href;
 const WASM_SRI = 'sha384-bmaXom6bK+vfssb0IcRH2lE1asksQiEsK/WnxAcnHDB3Cx8v3KxZ7BthuGq1DU8v';
 const LIMITE_MS = 500;              // por línea, como VS Code: una gramática mala no congela la pestaña
 const TIPOS = { other: 0, comment: 1, string: 2, regex: 3 };

@@ -1,0 +1,1115 @@
+{
+  "schema": 1,
+  "note": "Third-party code Code runs, pinned by exact version and sha256 and served from this origin (third-party.mjs). vscode-textmate and vscode-oniguruma's JavaScript are committed in js/ext/vendor/.",
+  "importMapPages": [
+    "index.html"
+  ],
+  "importMapBase": "./vendor/third-party/",
+  "packages": {
+    "three@0.160.0": {
+      "name": "three",
+      "version": "0.160.0",
+      "license": "MIT",
+      "source": "npm",
+      "tarball": "https://registry.npmjs.org/three/-/three-0.160.0.tgz",
+      "usedBy": "js/city.js, js/vcc/builder.js, js/mind.js, js/mind-adapter.js (the 3D views), through the import map in index.html",
+      "select": [
+        "build/three.module.js"
+      ],
+      "closure": [
+        "examples/jsm/controls/OrbitControls.js",
+        "examples/jsm/postprocessing/EffectComposer.js",
+        "examples/jsm/postprocessing/RenderPass.js",
+        "examples/jsm/postprocessing/UnrealBloomPass.js",
+        "examples/jsm/postprocessing/OutputPass.js"
+      ],
+      "licenses": {
+        "LICENSE": {
+          "from": "package"
+        }
+      },
+      "imports": {
+        "three": "build/three.module.js",
+        "three/addons/": "examples/jsm/"
+      },
+      "integrity": "sha512-DLU8lc0zNIPkM7rH5/e1Ks1Z8tWCGRq6g8mPowdDJpw1CFBJMU7UoJjC6PefXW7z//SSl0b2+GCw14LB+uDhng==",
+      "files": {
+        "LICENSE": {
+          "size": 1081,
+          "sha256": "852e0e8699169bf9f6fdc6bda3e682d078dcbc738b5d33e74df594721bff271d"
+        },
+        "build/three.module.js": {
+          "size": 1272972,
+          "sha256": "76dea8151bc9352aef3528b4262e249b2604f62543828328db978d060d61a495",
+          "sri": "sha384-61S/Nu32S3E5+n+KpCOTb2eRYps6fVKm+9Gz1QBvSePFthb46f063Aa/qe/lykFZ"
+        },
+        "examples/jsm/controls/OrbitControls.js": {
+          "size": 29868,
+          "sha256": "5a44a9e86a2a0fb11933eed69bc2cd33c76a496854c1aed6ed776efa87d7b064",
+          "sri": "sha384-qlO/ZugKPxAQUAvTlQoo0QECzxJIJySZmCF/DHdb2Xn/hHndFwX/vfUAC9Hbk6LP"
+        },
+        "examples/jsm/postprocessing/EffectComposer.js": {
+          "size": 4651,
+          "sha256": "d234e578618fa816955ebdc059c049c577e203e650e33cf22bde3f232c29e669",
+          "sri": "sha384-L+Ns9skCAqjab7aG8LH5VLknBCoENW7p37sOj39jnITwlWZFabWc29JwzgYf6ygy"
+        },
+        "examples/jsm/postprocessing/MaskPass.js": {
+          "size": 2231,
+          "sha256": "328cf7db0da5d9be83ffe39d54b01d5ac1fddf108cc98182ddbb056f5c8b537f",
+          "sri": "sha384-SDM80tiGflO8UDV/QzR/mASjcc/+wF7KfRVFNHJUIPcTctwoPI8GoWVTlccZw7V4"
+        },
+        "examples/jsm/postprocessing/OutputPass.js": {
+          "size": 2398,
+          "sha256": "13817fc7a87f662d29d2c5e00f44d3a4588c9afac4a372de0cacb0e44e368ffd",
+          "sri": "sha384-RJJc+pg+Ue2ZwXlf8n78cPHMiHrqfr+AxxabF5vkXMXjNPF6nSUoqb20IQXkMo6c"
+        },
+        "examples/jsm/postprocessing/Pass.js": {
+          "size": 1706,
+          "sha256": "b3c6128340eaa37e40a6a2f1b738e894c855239417d50959759b34a2b5e89f92",
+          "sri": "sha384-gSqIFh8vMmp1veyOysIS3KPVUl/A5JPefYvW4b89OeYeW0bwkrjN7qcC1h0XJK/K"
+        },
+        "examples/jsm/postprocessing/RenderPass.js": {
+          "size": 1915,
+          "sha256": "1c90c085312871c4bcdccfcf519499c6276dd503363fcf7cb7f703add45cf4a2",
+          "sri": "sha384-LwKrkOBAkmQ2KT4cv6P6q9Rb9L01GIFU34Zp16tGWZoBnrVuujfjpYZb7OxEMb0J"
+        },
+        "examples/jsm/postprocessing/ShaderPass.js": {
+          "size": 1576,
+          "sha256": "3b28a1ee27e0eb96c0eab137a1f442ccf127a926904eced2d51e125ec44af781",
+          "sri": "sha384-zetU6HhR/vTtgSvnS9DE+GQPZhVT/ZOSLa/1+DSM6rkM9hvBgQWr9bCEosZt93ch"
+        },
+        "examples/jsm/postprocessing/UnrealBloomPass.js": {
+          "size": 12406,
+          "sha256": "8f09315c0cec117a0ca2494d3e3586035b3c4323d6dcb037537cc51b04c3cdba",
+          "sri": "sha384-R734/7SvtqjjeteDKG4qcQA0adDCZ1ZcKfYUZsbVr9qqHGlgSXH9eNN4b3NIgwuc"
+        },
+        "examples/jsm/shaders/CopyShader.js": {
+          "size": 571,
+          "sha256": "4e3346db194db56a596cd074e9bdb39fb5eb52040c333e0d29dc4eb1324d3b1d",
+          "sri": "sha384-kzVlcj2amFaRNIWZ5zE0PmIN+QTNWWvrgKk31S8N/7w0nf7Qq3xqxHRLbD2UPPSl"
+        },
+        "examples/jsm/shaders/LuminosityHighPassShader.js": {
+          "size": 1192,
+          "sha256": "3d841cc594a0c1767d1b0185720b32761a0133c5f1b70b56658e28f2fb9b7900",
+          "sri": "sha384-621kiA/kIdX8rtH6VU6+SwMVx+B8g7MQ6x0fei5dZVX3CQZSLkpOlglIk9sxE+/g"
+        },
+        "examples/jsm/shaders/OutputShader.js": {
+          "size": 1393,
+          "sha256": "53a52e430c27bc36ceaab8ae90a2b4af7b02672d7ee4b29d6ba3c28e09c92c2a",
+          "sri": "sha384-fT4woAJJtXcAxElHG1cGfIZkiSxaj7u+24LHlfNVDZZ9aSjZvr2emMGPmcD9eF0V"
+        }
+      }
+    },
+    "@litert-lm/core@0.15.0": {
+      "name": "@litert-lm/core",
+      "version": "0.15.0",
+      "license": "Apache-2.0",
+      "source": "npm",
+      "tarball": "https://registry.npmjs.org/@litert-lm/core/-/core-0.15.0.tgz",
+      "usedBy": "js/providers/litert.js (Gemma through LiteRT-LM); its WebAssembly is loaded from wasm/ here instead of the package's default CDN path",
+      "closure": [
+        "dist/index.js"
+      ],
+      "select": [
+        "wasm/*.js",
+        "wasm/*.wasm"
+      ],
+      "licenses": {
+        "LICENSE": {
+          "from": "github",
+          "repo": "google-ai-edge/LiteRT-LM",
+          "commit": "2117fc4314670e00047bc8469783f02a68c33f0c",
+          "file": "LICENSE",
+          "note": "the package ships no licence file; LICENSE of the repository at tag v0.15.0",
+          "gitOid": "261eeb9e9f8b2b4b0d119366dda99c6fd7d35c64"
+        }
+      },
+      "classic": [
+        "wasm/*"
+      ],
+      "integrity": "sha512-NWLgsQ7ktO2dCsx2z/KzX9r/1VL2Sfjl31zskCAzGwq8ujPRrBzJXz2IXCQJ1Kj29IaVa4b86SDR0aoAURuWJw==",
+      "files": {
+        "LICENSE": {
+          "size": 11357,
+          "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+        },
+        "dist/cleanup.js": {
+          "size": 1093,
+          "sha256": "73e9c4a02abce9f5bc971048ac209a297cb001230fc1c99de8df5ac1e9287cf1",
+          "sri": "sha384-UjFag/L8TOx6/mwWUhDN9ZfVKrelYd8DX+HjSScdY6h+uVHUg4WeLVAw7jJrXIHl"
+        },
+        "dist/conversation.js": {
+          "size": 6051,
+          "sha256": "8d2d3784e325f12b2544c8f63bbf09a6e5dab94fa6319ec7ca140aa7f0ab8397",
+          "sri": "sha384-XuKZxNjmOvIEveNS+ZIW2Ns1W247ff1G7aQO+CLdSlzhRAdhBfWqhjNpu+mzwpO5"
+        },
+        "dist/conversation_config.js": {
+          "size": 660,
+          "sha256": "39c5debaeafd9dc3f5a3fe64c711f0976a982dc9bd2b65a24ba9af010e9734ba",
+          "sri": "sha384-DweDJXF2bY77VRzmEfsWWkj8ogjYzq+RKO9buTbcteSo4er0MDS2qqzKw1sCz+/T"
+        },
+        "dist/engine.js": {
+          "size": 8127,
+          "sha256": "fdabce2282ec8bc2aab899068e788ac7dec28503375c4e035e82a48209e302a8",
+          "sri": "sha384-o+7K/V4MVgmUbpzJGBpHdYW4BDtO/7qSkfwcJ/6sZgykXhjqdlnb37hvnmVNXP1+"
+        },
+        "dist/engine_settings.js": {
+          "size": 5025,
+          "sha256": "4739aa3a749742ce4d1173d6738a8a72db6ea464a96b7747a2d1b70845af0202",
+          "sri": "sha384-HOQc3I9ztnchTamsqRI9Eqbq2sbF00BLFyJA5JmQp8F3sQAHw5nRgY9hEWRHRUa4"
+        },
+        "dist/global_litertlm.js": {
+          "size": 2521,
+          "sha256": "d33630e06cd8ac9c17129b9f8c05343d6e8bfa1a5a4717738004f974a54b8e91",
+          "sri": "sha384-3ZosUJRxCMw/jBQn7xFWmcWvvLw1dhffAfZpgTAzebskTRXR3kVM5ECbz32xpf4/"
+        },
+        "dist/index.js": {
+          "size": 1226,
+          "sha256": "47fedf7ce2403ab4f4a07fd5a3dff7b62975857d6fd50160f984c227cbe71b8b",
+          "sri": "sha384-qVq+muRpbW1xlTrrEPYUVcZCdX/tStAgjgdXR2zNimNHb4lMWTvvvtzKG4NXtzKI"
+        },
+        "dist/litertlm_web.js": {
+          "size": 2563,
+          "sha256": "c9b9164de14b0778b35b4bd35d11ed02002277641b0e3ab412394653773f5ec8",
+          "sri": "sha384-NFbU8KvT8BzO88k7e4J4xFhwGUU62HUztzAdlNlJlDQtsYyyyg7wHvjFGbagZHAg"
+        },
+        "dist/load.js": {
+          "size": 2097,
+          "sha256": "a083f7fb5f287b0fc4578de6dd25e02fd638285709193a001a74c464e5502f67",
+          "sri": "sha384-wRfTt9oOWAoozSG7dvOVAe3uDI0g3f+EzWVW+tZjynifGvNo2itzi1OFeFraIAQ5"
+        },
+        "dist/load_litertlm.js": {
+          "size": 3420,
+          "sha256": "8fadd413d19c2fb59ef77116ff3d79dddc8a03ddecc72e2b9126ff17f0a5e207",
+          "sri": "sha384-SXIB/Pys8ypQmyUDaCO3+QL8JQkxJrDbuljfsK+kxmbELs3dYRG8KO0BkLkuIOC5"
+        },
+        "dist/mutex.js": {
+          "size": 2262,
+          "sha256": "2a103f6f37d2077cbb7f24c3ce6d154bb227712a0bc633e253709a4241485833",
+          "sri": "sha384-B9ZQon9S1L9ieU0Ub5MiGs6qq7/cGTaBI4yexB8vdG4ydlznbNDq1EX3huUqwezn"
+        },
+        "dist/orchestration/auto_tool_chat.js": {
+          "size": 11988,
+          "sha256": "4ad20a6b97e026cec41e28dcaed3cf6d700c705e1d5385e419d44d15bc6abafa",
+          "sri": "sha384-dmWSDAVhBEMe944CAKE5zbKmeOqHN2BeBqkxKLFMMsebUQ6GxlT0v9eh1uH901zq"
+        },
+        "dist/orchestration/chat_interface.js": {
+          "size": 655,
+          "sha256": "6b1a17ce28d0985c7873a870dc719ea9e8ababa83c71a434df21034304703b79",
+          "sri": "sha384-8EC7rKm5AV8C3BNfP7ySsbDASvHkONJoKhjvsCdV+d5aRRD0FgM8oYBszc/P7dkc"
+        },
+        "dist/orchestration/webmcp_tool.js": {
+          "size": 1041,
+          "sha256": "1a6f875f77b4e3e5466b345a52d81e213c84578a72a8558ba5d9cddc3ef9fd9d",
+          "sri": "sha384-Q4BewIeL+ahvUAqgVs951Wp1wE8GPuRgk3JpUiDtgCIRFr2gfSZPTMeEhIt8zwbY"
+        },
+        "dist/readable_stream_data_stream_wrapper.js": {
+          "size": 12648,
+          "sha256": "23e7a7bb1473f883b60b2971f62f8207d8269956c3eceb541c4f469dfecb8273",
+          "sri": "sha384-mI7iwdlOWUiMCvfuXbjmQHD+8ZjLFcr+PLk78olAZLg11YUtJluL7xQMuWG77LAU"
+        },
+        "dist/session.js": {
+          "size": 3206,
+          "sha256": "972a543de2b5044cf822852987efdc179d3480b3949e4086e58d6cbcf50ae1c6",
+          "sri": "sha384-A4Xpbh3y/371DzmciCc6au1plYla0iGjNdKyPmNc5iB53FtssunGJXCQ/WZ1DhR8"
+        },
+        "dist/session_config.js": {
+          "size": 4990,
+          "sha256": "41f5ceb3174dab53802d1de6d2b35ba2fd8e63f2475bfb85a9a0607b1c4bd3b8",
+          "sri": "sha384-YFfrQn9EFaHmy4l8fVYBBkfNjf5TVwgKYnNR4Z0gR07KMPMd1mwSiuKGawNqTbjj"
+        },
+        "dist/types.js": {
+          "size": 639,
+          "sha256": "984a17083f524b1b2558c0505afb75772d3a7a526023a0f502f03c81e8c4b622",
+          "sri": "sha384-/yZ5IHlFs5g852b4cMOf8h/YyhPdV2nS3XwsO94v3u51UGRKNcSk/V9l9E/Y0eFZ"
+        },
+        "dist/url_path_utils.js": {
+          "size": 1153,
+          "sha256": "436630f0e789876c1804622611ef9b6368bdad3ba2d666141e17c5f496e98219",
+          "sri": "sha384-2TC1CJAW7iJy7bTqM2IqODVpc7ZlhZ2yzTk+hJVTHR5xTrYaEne5E6WrAcJvoo+6"
+        },
+        "dist/wasm_binding_types.js": {
+          "size": 1114,
+          "sha256": "61404ed6c3a89f05c541a4a8f42eae0cdfb28a3737ea747b24b23ad89fb6f37a",
+          "sri": "sha384-UShaPFady1bVG1zt5DxLlnhUuTjNaq0+SttO9OZOXifkTkT53U9jnSE8bsz7GRar"
+        },
+        "dist/wasm_feature_detect.js": {
+          "size": 4258,
+          "sha256": "4551f357a78bddb645430b0f6cb5d18f2b46fd55c3c57d756191ad4e3601161d",
+          "sri": "sha384-QEW+LPGz6DemPhjaBBeZYAaEsiXLd3lb/RLufHO2jFIcvadHaC29ZP6qzeHC1Vtq"
+        },
+        "dist/wasm_utils.js": {
+          "size": 1347,
+          "sha256": "926b9c21aff5cb80e399d39c0aa2c30a16a66d8dc00ecb653ff8e38b590c6e83",
+          "sri": "sha384-BmayuME+B2IDT36ckG0ieeYOM19fBzycQFj6lxXtopK/uEG4/SZk8vGg9BqH+n6G"
+        },
+        "wasm/litertlm_wasm_asyncify_internal.js": {
+          "size": 300292,
+          "sha256": "74e34511bf4337679d727e79831b6734830b54f1adc4549ebdb9b58b157491bb",
+          "sri": "sha384-gTVZ1dIZdeqihLlRX8ZZZIRa+EpnMsLD5MyMmbffH/jK9OE44n2vDdmAXEKu3BwG"
+        },
+        "wasm/litertlm_wasm_asyncify_internal.wasm": {
+          "size": 31991491,
+          "sha256": "6c0fe526030c02377c0b1c1bde3cbb308d9facd22345fef9d8be0443cfc75c73"
+        },
+        "wasm/litertlm_wasm_compat_asyncify_internal.js": {
+          "size": 300503,
+          "sha256": "9d92349ae22dcf3578d35cdf515d26cb22a3194c02945afa9c46dd025aac7320",
+          "sri": "sha384-ORd+H/MsES0CqjZ2AqyJIeuJpHNr8wIUt+xDY4eEq1ntLnD4zacUjqMsXIwGSbNM"
+        },
+        "wasm/litertlm_wasm_compat_asyncify_internal.wasm": {
+          "size": 31945985,
+          "sha256": "b16e2af3d7813f0289d3bd73f6c7b156a86f6a3afdd6b77e3a6338d611dc8a27"
+        },
+        "wasm/litertlm_wasm_compat_internal.js": {
+          "size": 292827,
+          "sha256": "a1a8c8abc9c3aa9115c2f9230299585791252c1940eaf30f6ea7ad4837d94940",
+          "sri": "sha384-fOU5wGj7xTOXygo0JO9vsiW0BkKe1TOZmVavPAPx1ifKqWSRxUHiwopB3LpRLV3w"
+        },
+        "wasm/litertlm_wasm_compat_internal.wasm": {
+          "size": 20360517,
+          "sha256": "b328b5448f188789fd371d54a2dd80be629082dd8176ecdbdfd68c0a4919f345"
+        },
+        "wasm/litertlm_wasm_internal.js": {
+          "size": 292587,
+          "sha256": "ba2d1d40099533291ad4cf7e26b660951681bc6b786cfc3ac673264293f532a6",
+          "sri": "sha384-4P16VMr91DPdzM1cQCMMKAX0In3mPEZ7031gPS1OHaefc4FvjB0pxKnXVA0VaKZh"
+        },
+        "wasm/litertlm_wasm_internal.wasm": {
+          "size": 20406004,
+          "sha256": "eec1ea586c547230e3198b30b876313bc51dddeec32425c9b981030827961a27"
+        }
+      },
+      "rewrite": [
+        {
+          "file": "dist/load.js",
+          "replace": [
+            [
+              "from '@litertjs/wasm-utils';",
+              "from '../../../@litertjs/wasm-utils@2.5.3/dist/index.js';"
+            ]
+          ],
+          "why": "the package imports its dependency by bare name; made relative to the pinned copy so the module needs no import map"
+        }
+      ]
+    },
+    "@litertjs/wasm-utils@2.5.3": {
+      "name": "@litertjs/wasm-utils",
+      "version": "2.5.3",
+      "license": "Apache-2.0",
+      "source": "npm",
+      "tarball": "https://registry.npmjs.org/@litertjs/wasm-utils/-/wasm-utils-2.5.3.tgz",
+      "usedBy": "@litert-lm/core (dist/load.js, rewritten to import it by relative path); 2.5.3 is the version the CDN build of @litert-lm/core@0.15.0 resolved",
+      "select": [
+        "dist/index.js"
+      ],
+      "licenses": {
+        "LICENSE": {
+          "from": "github",
+          "repo": "google-ai-edge/LiteRT",
+          "commit": "d30595a09f74b4c4c4f669eafeb26928a92deb5a",
+          "file": "LICENSE",
+          "note": "the package ships no licence file; LICENSE of its repository at tag v2.3.2",
+          "gitOid": "261eeb9e9f8b2b4b0d119366dda99c6fd7d35c64"
+        }
+      },
+      "integrity": "sha512-4fJiw6tBQnIs+0jH/OQ16nYOiSl8/+zZnn5h2ul8aTKHi05sVqZW580Tmk78pC2kT39A9OYBVdFawteZ/sI1kQ==",
+      "files": {
+        "LICENSE": {
+          "size": 11357,
+          "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+        },
+        "dist/index.js": {
+          "size": 1494,
+          "sha256": "e0e20bc28ab001ac732cf40d15b6eebd24fb0deaeb95eeba5100f51eebf015f2",
+          "sri": "sha384-HIPwlWsctS5BRqrnvJKDVJ8SvqKB0QmiImdr6+hpP7+8UqeMJX/qrBkdfKQV2WZ/"
+        }
+      }
+    },
+    "monaco-editor@0.52.2": {
+      "name": "monaco-editor",
+      "version": "0.52.2",
+      "license": "MIT",
+      "source": "npm",
+      "tarball": "https://registry.npmjs.org/monaco-editor/-/monaco-editor-0.52.2.tgz",
+      "usedBy": "js/ide.js (the editor, AMD build: loader.js, then vs/editor/editor.main; its workers start from vs/base/worker/workerMain.js on this origin)",
+      "select": [
+        "min/vs/**"
+      ],
+      "classic": [
+        "min/vs/**"
+      ],
+      "licenses": {
+        "LICENSE": {
+          "from": "package"
+        },
+        "ThirdPartyNotices.txt": {
+          "from": "package"
+        }
+      },
+      "integrity": "sha512-GEQWEZmfkOGLdd3XK8ryrfWz3AIP8YymVXiPHEdewrUq7mh0qrKrfHLNCXcbB6sTnMLnOZ3ztSiKcciFUkIJwQ==",
+      "files": {
+        "LICENSE": {
+          "size": 1098,
+          "sha256": "33e4ff1a06ef62ba21788ea162564ee8165269a24a9ce6ef301837447eab0ac6"
+        },
+        "ThirdPartyNotices.txt": {
+          "size": 63064,
+          "sha256": "790537262fc78a764e121e6b92b959bcd3f5c310b47d9d9b9e92e17fe0af5336"
+        },
+        "min/vs/base/browser/ui/codicons/codicon/codicon.ttf": {
+          "size": 80340,
+          "sha256": "0f1d5219934e96e83b8db162d60b4d8c09b5de1e7d38031cbafe4a3c0f2889c9"
+        },
+        "min/vs/base/worker/workerMain.js": {
+          "size": 376515,
+          "sha256": "dbe4aa4f2874f5768e8d98e94281667c0bc493e02dd9760adca930699ff3279b",
+          "sri": "sha384-E+dAR/J/5QJorSgHftYIrvbbqdcfQ6JdmC6+/Bk17oJDltobW75bUWcqWEA4M+AA"
+        },
+        "min/vs/basic-languages/abap/abap.js": {
+          "size": 14986,
+          "sha256": "dc732450731b12d051879da8f2338fa30168af60c8fdbe60bfadfe74068b4d7b",
+          "sri": "sha384-F+YXodQglm5Lf0RV+l7ePBpmU6K3FxqjMJ/IFLOyPx6dHzBbcUbdX+0V2LsZ7aAD"
+        },
+        "min/vs/basic-languages/apex/apex.js": {
+          "size": 4775,
+          "sha256": "96d67c25a6cdf6ade6542e737cead9f6441d2d8bcae85d2989d44477ef276165",
+          "sri": "sha384-IYvxCyE/a4zI2TlixPClPAVPYm7S8RKHI95BWJVyAHUgszKip523ICHNscJN4tcH"
+        },
+        "min/vs/basic-languages/azcli/azcli.js": {
+          "size": 1673,
+          "sha256": "579b894877cdded3c2c6b8ef90a30ece802fbed44d9dab9ae12221a4be485e9a",
+          "sri": "sha384-kDDjQPbyTdAb9B0/ipC2GSOFsAWdME1RnQqAVw83UoosGccTPkQjjCGviTEuciXB"
+        },
+        "min/vs/basic-languages/bat/bat.js": {
+          "size": 2666,
+          "sha256": "75cbd235b127d3eef0a6b90cd83edc049cb264381971cba3d0fce660f9e5a68f",
+          "sri": "sha384-WNn6zw/IF82tsAcCbqPbwH2cpXAIHSvJH/gr1PoyrCkUytPNr/85h4YNeGG59Fg7"
+        },
+        "min/vs/basic-languages/bicep/bicep.js": {
+          "size": 3361,
+          "sha256": "94fb7442cec7b669ff87aeb58d0d7c264830f0bd72072647b563d4c49698f48a",
+          "sri": "sha384-HoXksSGHCzm9/WzTb5GA1CfZJNc4W0Ff7aiqhqARLANKoefo7bfsqS7Hb1o7oKI9"
+        },
+        "min/vs/basic-languages/cameligo/cameligo.js": {
+          "size": 3016,
+          "sha256": "b667c861eeb35eca8dd39ebe952a251c66e104267cd16344856a6cd6c1e88c57",
+          "sri": "sha384-4CPboAVwUdA8l2VorGszks40DhLPRz4DgCF9GzPiQl6amz40ZQwHzQH2h+Nv381Z"
+        },
+        "min/vs/basic-languages/clojure/clojure.js": {
+          "size": 10472,
+          "sha256": "1ac122e851515c788c65589dfabe18fa40b03a90d67b6c835bf27fdd678d8fc5",
+          "sri": "sha384-QLBLstgDdWPM0sIu4d6crHaFtnA5I0g60Fw4T7VaJ1zq5c9Cscz8m8RDlHKfjOqy"
+        },
+        "min/vs/basic-languages/coffee/coffee.js": {
+          "size": 4417,
+          "sha256": "4756a8c0d68cc19b2490403f39b22bcf3a518364eace045eaf87ca36fc7a3124",
+          "sri": "sha384-lqB0vkUtd1b7eXP5m07xrS7q0WUwPEwWS4DC0yOLqz+HQ2zY8ABGIfn95qDh+/tv"
+        },
+        "min/vs/basic-languages/cpp/cpp.js": {
+          "size": 6121,
+          "sha256": "52124e8e802797f89ca8e4415c6b9d63a55264de54ea1b38b5aa663159c46c1b",
+          "sri": "sha384-xWERe8RAN9NjvLMTAl1DlIZ1hEpdgajh7V+hXUpJmoOQqmrTbX8ZJ5EE+KcywBt+"
+        },
+        "min/vs/basic-languages/csharp/csharp.js": {
+          "size": 5351,
+          "sha256": "efe2ca37b83f691348ccfa1b310fe4ddd1f42653fe13f4354e4e724e39153e95",
+          "sri": "sha384-pw9ORightKvZAeje0N28zJVLybFSBDCvvvZ+oPpuNdPY9788F1Ag2Y93ydQuN2NB"
+        },
+        "min/vs/basic-languages/csp/csp.js": {
+          "size": 2240,
+          "sha256": "4b05496f741b764550cddb54651233e618e2aed867e4891fd2575191a10cc4fe",
+          "sri": "sha384-zjWFUJrMbXnLQuTNyuw3Bb+A9EmivtaBu6rCwk+eTGZiLhBvd+Ab7nR/Cn9Wxfqg"
+        },
+        "min/vs/basic-languages/css/css.js": {
+          "size": 5331,
+          "sha256": "92220aad32d0a817016e500ff7f7d1b072d6c8c36367742c133f83882c1b7ffe",
+          "sri": "sha384-Cfj8rBoPYfc+sI+pqxLxJa404mlTZMxoZ7gBcf2aDQwAO8pZVc2cJFKLJ+5LBV15"
+        },
+        "min/vs/basic-languages/cypher/cypher.js": {
+          "size": 4212,
+          "sha256": "00135bea5372b4c0e8cf411b18853968e39f041605bf5252a2c8105849d6fb9c",
+          "sri": "sha384-XG1iNwO+5KMmpYFKAzoehTgaDAgq5TY5/F/2C7CQpRGO7PYCKmQaC+PLBQjfscdU"
+        },
+        "min/vs/basic-languages/dart/dart.js": {
+          "size": 5073,
+          "sha256": "9ed4583d2ad0605822f006d25c04525e5869891f884808a43c79c1a96b658473",
+          "sri": "sha384-F+anXug5zIHy7GNTdHxh0ouTS2omcLFPR+cjhRBw3b/THfOdunorCYSGkCRoUPMQ"
+        },
+        "min/vs/basic-languages/dockerfile/dockerfile.js": {
+          "size": 2704,
+          "sha256": "0de466e07b2045975ebdfe8ee61fc6adeba7aa5a36bb7bb0b1532762650fb342",
+          "sri": "sha384-PObthbVNI1N3njVrUaUkV1h/N0AUAZ48KSnOAIYYVz4g8IIgL7c3Ft0Rk/2XLFJW"
+        },
+        "min/vs/basic-languages/ecl/ecl.js": {
+          "size": 6163,
+          "sha256": "0d9dd1b6eb7dd32d114d3ed87803afb1216ce9bd917dedc37f32bb139292ddc7",
+          "sri": "sha384-udT31wgXuEGTSYegqVQDxEYQV1P6XWdqPQbs30jwCsinU3oQnNUcSrWDGLnxJNfY"
+        },
+        "min/vs/basic-languages/elixir/elixir.js": {
+          "size": 11084,
+          "sha256": "89f7bd4629f8261e33fed69c2efddcd66d01b8346392ac74c453e2116e809dd9",
+          "sri": "sha384-U3np7sfS4bj2mJ8thTlVPZ+iTtmUEPe02kkfQNEayXRSap2j7yG/ph1yfdue4Peb"
+        },
+        "min/vs/basic-languages/flow9/flow9.js": {
+          "size": 2635,
+          "sha256": "9982918be402c06f9c703345648f7bc625d38eb9b15da88124d79418217575ba",
+          "sri": "sha384-8ZJH6wJIQT4cQUHhNYeDq7qCXKxFNmV3symVf9s+RmOP2IMbVMWxxlzN0iJ+ttNH"
+        },
+        "min/vs/basic-languages/freemarker2/freemarker2.js": {
+          "size": 17149,
+          "sha256": "6a9b441e058915a320129a4ab64c5778cf99ffc2b7f6661b7ca5a07d2a434efa",
+          "sri": "sha384-ICXughSLv3M5PDViViYZRkksBoklqkA8vuqCN9tz9PflQCAyA0/zyG0NZ+zDjjIB"
+        },
+        "min/vs/basic-languages/fsharp/fsharp.js": {
+          "size": 3810,
+          "sha256": "f53a2d0921e03d232f07f0014cdd07d99558ad98d3478717ccd74e968434248c",
+          "sri": "sha384-fJNf+wKBTtjJSrzLYV/EeNgFrU0NYbYwQ4dEwvaaxquqWPMp6ag88tRICM5PWXQA"
+        },
+        "min/vs/basic-languages/go/go.js": {
+          "size": 3476,
+          "sha256": "b94f30b9854f995a608da2bac17802da8cc83234a34b374b307569df850ec839",
+          "sri": "sha384-aTWWZoUPyRvdVHHTThqvW7cLL7zwt7uXXyQl1PBP33YtZqEROEbImYDycT62PrJ9"
+        },
+        "min/vs/basic-languages/graphql/graphql.js": {
+          "size": 3089,
+          "sha256": "5bab64815245a9e79fe922f0d010d5028395f31c92b3aa4e187113c968b6c58b",
+          "sri": "sha384-W+dpmI0v2q++UmEIKw8OJkWlElA5DoS1OODFYGZpGtf3rs+VmbezjS50pFVdlqpY"
+        },
+        "min/vs/basic-languages/handlebars/handlebars.js": {
+          "size": 7827,
+          "sha256": "55f04266be83009aebd6b25a5fa46452f524c99d17ad17c4b18c24b8e6f89496",
+          "sri": "sha384-MYi3jBHCUX4xbGVMqn7a1XZgyzdkeYO0TmRPi/cVspE/NSpRJ+mP70YOKcQJ1hkw"
+        },
+        "min/vs/basic-languages/hcl/hcl.js": {
+          "size": 4411,
+          "sha256": "14b490d77d2d02678b17ae34b1796f5fa31a32be2569f834b65b60a429bf97bf",
+          "sri": "sha384-7ozz44xzexc1SBedMI+yAZgKtlG52/S+Dr6qronL3sxgCUlFfwvNLWb6ZhMYdDpD"
+        },
+        "min/vs/basic-languages/html/html.js": {
+          "size": 6055,
+          "sha256": "001b44bd88d864aa5cd165d2c326d0ea253f80647a88b92683759eaee4b0702d",
+          "sri": "sha384-jJFhCqILy9vx0ekxrQ9QKp5x7/xuHlHbojw0O1fXHm/itds9s/VpolToVnTrao9C"
+        },
+        "min/vs/basic-languages/ini/ini.js": {
+          "size": 1922,
+          "sha256": "25e9a52de4fd77a5f87bf22baa94703d2bcee82d119f93cf58921a751f3c203f",
+          "sri": "sha384-t5pKQlbatzFTb0uMDAn57bqbhixlmjIJ7rA+IWiWTZ0QeEuaqSIWQHQvSHJ5cWuN"
+        },
+        "min/vs/basic-languages/java/java.js": {
+          "size": 4044,
+          "sha256": "f5a6e854d70a317188bdc3000928665d811bc1ad63237312f8954e10037a28b1",
+          "sri": "sha384-FCcva6j5pfIFwQCAQZkspePiAizuaIC7xwGJZMBBkjKp0hxxRBo0FWdYAFP5sQpV"
+        },
+        "min/vs/basic-languages/javascript/javascript.js": {
+          "size": 7137,
+          "sha256": "169988c69c81eeccdd58435c502efcb7d6c1a667da072f0bba3a0022f8b85e46",
+          "sri": "sha384-YYSSe7yqFkfQUQTP2/R5dXw89AI+2wNdquBWmJnB55Qb/HagPtWL3S838P80FEpu"
+        },
+        "min/vs/basic-languages/julia/julia.js": {
+          "size": 8052,
+          "sha256": "03319b1c3b9d780c9ec06575a2c349d5e48f262bd7af42716007efbccdb563ed",
+          "sri": "sha384-Q4CCTxmn3EIXK4h4txAV9zXOoRis+x7WPQaCK37iJKnbsRaHJ/VKoilmI29pM8S5"
+        },
+        "min/vs/basic-languages/kotlin/kotlin.js": {
+          "size": 4266,
+          "sha256": "d736176b14856a1ebb09bdfd043a898da4b97cc3c5145b0996832f8ef73baa1c",
+          "sri": "sha384-e2/fkGuaOUQA0zIx71BUdnTcJs7lgKtn9O6xdiAEQNLBV3bkMBu4iVMYOlXS+waC"
+        },
+        "min/vs/basic-languages/less/less.js": {
+          "size": 4721,
+          "sha256": "47c17c686d409d11023d1b9e470d7e4c4971d8418fe6ffb6d7844a8f27a6c979",
+          "sri": "sha384-FQkPcXHv8v6VsctunHDXNz7s5FjlN0fO4WtWStxE0epEj8L/qBNu+A7pn6YdNs6w"
+        },
+        "min/vs/basic-languages/lexon/lexon.js": {
+          "size": 3262,
+          "sha256": "d97e007cca8271a087222884eb94e9b17b2b02eaca0c933888ee2e2d773afd78",
+          "sri": "sha384-HrZ4+BPOIMM/rIqKWekheiDv68jWzpHtwJcxWfPdDh8LZOEQ79iZ9uV3CXAEI6yB"
+        },
+        "min/vs/basic-languages/liquid/liquid.js": {
+          "size": 5005,
+          "sha256": "47765d89a06e1c9d06895c35249534dfcad1b748a039e8ffc0ac66f97d456b8f",
+          "sri": "sha384-cHbTLFRmPRxu2veqFmG40Ssn4iaK9G1FyVWQE252okWisLGAYvpztJLjxyuwlvX7"
+        },
+        "min/vs/basic-languages/lua/lua.js": {
+          "size": 2944,
+          "sha256": "5d46959daacfc940fc177d59e1dcf75fc18b0aa3d0ccf18594316c297c71da86",
+          "sri": "sha384-FuCF8e5dCg1YCYuN0/cNd8KEpsTPAaa7H1Xr6oS+0jQtjfc03Ttpqigv8C5IDmeA"
+        },
+        "min/vs/basic-languages/m3/m3.js": {
+          "size": 3636,
+          "sha256": "b8301f00a5efd7104ce3166542ba0b544e477999509d0c646133de9625fd7a3a",
+          "sri": "sha384-wF67ZYTm/YNWZTWvJY5ZPyJJoC25GYJayMs1jNkpNA8dN877z11drlYJLujGBjYT"
+        },
+        "min/vs/basic-languages/markdown/markdown.js": {
+          "size": 4619,
+          "sha256": "0e3ddec8d09da9e89b0e8f46786f30b781982f759f29c5e6c22b0b4b00acae78",
+          "sri": "sha384-C47IFBRFv8f58A8rCC4v6uUjDWhEUJCxtaFZXIYfg5n3YE+pIPjS05GSahsrtnBd"
+        },
+        "min/vs/basic-languages/mdx/mdx.js": {
+          "size": 5916,
+          "sha256": "f7969b7c567c43ced6303da0f5c080c97d65b09932ca2ec56bb406c0074bcf6f",
+          "sri": "sha384-tNA0qhuQ/83pTICmlfmsod40B/MF0/+qSeawgFk63+SArrX3Ao80x4iJwlJbrkGP"
+        },
+        "min/vs/basic-languages/mips/mips.js": {
+          "size": 3402,
+          "sha256": "52628efb022d4042fd4986eb25573e7c57761a58927ca7692aeed0d63cc8943a",
+          "sri": "sha384-SP7y/CZvQWwaHGB3sexvarn8yJWlGHDbp0MLSYnlxvKSHxTSpGtoHWl7uMZYezEC"
+        },
+        "min/vs/basic-languages/msdax/msdax.js": {
+          "size": 5737,
+          "sha256": "5f419eb81cb11ebda7a368724a2fba75e5b75489ae5aee64e358077959205659",
+          "sri": "sha384-iUWDV+jD53ZOY1nWoXTNYeLDRRM5oy0E8IlEuk2U4iIZxuDvIng2xz27zMfjkLI3"
+        },
+        "min/vs/basic-languages/mysql/mysql.js": {
+          "size": 12099,
+          "sha256": "5516f47c461e3c2db7bf70bb061c80011bd57e3db48da5a407f62a8681a49d85",
+          "sri": "sha384-4TGsuPRxSKqkdfDWrDpMD1vAOb1pJmb3lJM/JRZnG9iktYyWym6nXJQkZ4tYQ6ts"
+        },
+        "min/vs/basic-languages/objective-c/objective-c.js": {
+          "size": 3239,
+          "sha256": "ac02b80f4ecaf3650cac477ce9f9fc810d7dfc9083805adeba6b272c85548712",
+          "sri": "sha384-eg2AJa5Bci4P/OE/E5ys+tTnH533DXrPZR/9dT9z8VtTMkaiwXn/PO523/N0T9zp"
+        },
+        "min/vs/basic-languages/pascal/pascal.js": {
+          "size": 3822,
+          "sha256": "9bef71e3ff29a179df2f36090501f30719c4d20156b943cbfbbd719898743dd4",
+          "sri": "sha384-PfHMy/Wt5CoZ78/07/GttkOYWAxcdCOim2BXURndSq9BThQqV9XoarFYO6pgz/o5"
+        },
+        "min/vs/basic-languages/pascaligo/pascaligo.js": {
+          "size": 2833,
+          "sha256": "b46f6456a71622af82592bfec7aaf68e3d71d1d3792f8153f9f2e62b1e3fe1f0",
+          "sri": "sha384-n5D69IRr5YzVuGXPxl/JoGfSq2aBSoH1HFjGqE/RPyYGtRdbP9EFVpZnclJiTiZc"
+        },
+        "min/vs/basic-languages/perl/perl.js": {
+          "size": 9078,
+          "sha256": "ed897b714002e7089e1c10074e3694db1d4d702ebb52cf84de63bd9e093f9add",
+          "sri": "sha384-D19vNSC4kuQ4EiApn8LJmpVbfgrXqWJM4f2N6QkF87UKaHg+oafFlVMe/kgAKxsv"
+        },
+        "min/vs/basic-languages/pgsql/pgsql.js": {
+          "size": 14289,
+          "sha256": "08d8e6d366aec43961a38fe17142f44339752b05928c68a35c65de90f930ddd5",
+          "sri": "sha384-AXXq0fkxyj63qcvrNu4omPlgtwwBITeF/J0spk5O+WfcdTdM5sxgx8j9X3rJHZXN"
+        },
+        "min/vs/basic-languages/php/php.js": {
+          "size": 8848,
+          "sha256": "ce048845100cdc880feb2e6d13474eb9963bb0e76beb6d7a9363d25acd6c44c8",
+          "sri": "sha384-o91EG2aKIyt7FezL0cGF2jcBHQa81Hvxhy5YB2aKW1O43xF7OZjMDdE9W+14pjUX"
+        },
+        "min/vs/basic-languages/pla/pla.js": {
+          "size": 2504,
+          "sha256": "20f527dafd1b353840ba7f0b1dde986474b106a18e859eac8ef0b46cb1adf8a2",
+          "sri": "sha384-CR6Apvj1x4visOu+DhzuDzw574sZqcKsqenPocLiw0WkKvaD4yNd6oenOcBuR8AK"
+        },
+        "min/vs/basic-languages/postiats/postiats.js": {
+          "size": 8687,
+          "sha256": "da8833778aab6f7d9ea0ab7349d0e1b10739a3c8e1e712c4fe01bd0323f8da9e",
+          "sri": "sha384-XoRMOVAzAA5Z/h7odDxLwv6R5TYe6/+j7pzlmfx0JnOkclNmB90cJD4Lyf6gX2ym"
+        },
+        "min/vs/basic-languages/powerquery/powerquery.js": {
+          "size": 17774,
+          "sha256": "3270ec1992045a0fedeef66cbb14245c8183dc5f12cd4dfe71dd21eeeda48da9",
+          "sri": "sha384-YN7jOpK0B+7F5uIn2bjoQj2vA++C8dGli5go/XM1luZlsQ3TuwPYf79SmTACPzzW"
+        },
+        "min/vs/basic-languages/powershell/powershell.js": {
+          "size": 4104,
+          "sha256": "948d8bccfa1045b07b87f1d8f9c9058a507d2a167aad14f3b83c64b6523e588c",
+          "sri": "sha384-CVa0++8isAAKRdwDoLi0UoJdgVa3Y60FDFacmvEfl9XYJa0bDhQ1RbOp/OD77EHy"
+        },
+        "min/vs/basic-languages/protobuf/protobuf.js": {
+          "size": 9877,
+          "sha256": "1ec0534959a0499a9165892506f98c465cdc9a7c25ad3868a20e9c99e71db335",
+          "sri": "sha384-awEVgh6T/OzE2tuyTIB9B5jWEV8W1sWJ0f3VUfMGZBEaSj1VdG68oj6BGZhAtvHs"
+        },
+        "min/vs/basic-languages/pug/pug.js": {
+          "size": 5649,
+          "sha256": "158264e710b017168f70696b910e47585f0b81358d65f5cd934f46b23b71c02a",
+          "sri": "sha384-SzZlKbwpiZM7tPGqFttrXm2M36B04jpfATZV4wqwalDDdwBQM//tT8SS5Rhn06TK"
+        },
+        "min/vs/basic-languages/python/python.js": {
+          "size": 5239,
+          "sha256": "043c66f7b48025022bd6fc15db72ea18d566534c4e8859774e6f52f23210d720",
+          "sri": "sha384-/Wl5Hgl7Fc9gZLvdjcTzg+L7i8Y8PI2GvOnkyvPeDONgUhsPoBEYKlatO3XfMbFC"
+        },
+        "min/vs/basic-languages/qsharp/qsharp.js": {
+          "size": 4016,
+          "sha256": "6d718f23d8606e554dbfe1fccaedfb991d9abb5234ab846f034af3c93d75a287",
+          "sri": "sha384-BCaGnMU5dpJmyfhgxc6IpjWN27JaNPqpsjG6c3MCCpp4H9+XXReLJWbEhZKp627r"
+        },
+        "min/vs/basic-languages/r/r.js": {
+          "size": 3948,
+          "sha256": "b717d83cb4dfd7129826e2d9d42e39a5e099b49b434b2bfab85de3e3a459dc65",
+          "sri": "sha384-oYRzwD2EHwuPKtxsSgaMwlZ/erlgeKFymoas3t7Ucvh5IWeYN2GPOf/kfiiSlbtZ"
+        },
+        "min/vs/basic-languages/razor/razor.js": {
+          "size": 9821,
+          "sha256": "1887bd1f50cd42c344ca2060eb6c3faa60bb2d9f554880c8924c80d6d8084046",
+          "sri": "sha384-UKa1iZyOu48TwuM5cQSBHNTdcvPpbzSe/NvVo608PtvYP6ZlD4aHjlsXI+PCRC6u"
+        },
+        "min/vs/basic-languages/redis/redis.js": {
+          "size": 4381,
+          "sha256": "f7a90a1c8e21b8ab30fff50986acbcc9ac83f2574729dada292f65243841377b",
+          "sri": "sha384-3x8cqJ30yVJBqJ2uykeWyCW+6dVivrjSf/2iAQWH7d+wJ/1FIngPI2DpgocOetsR"
+        },
+        "min/vs/basic-languages/redshift/redshift.js": {
+          "size": 12631,
+          "sha256": "b566247e8c2d17fabb0b31b072487bc9631420899b829d8d26ea3f9c6b564527",
+          "sri": "sha384-s3LmV7oZ2U3njYmetmEMzvfvvdNkU5qJg0eOFL2eD/tH0Y+85v1tFlI2hYqvnfzu"
+        },
+        "min/vs/basic-languages/restructuredtext/restructuredtext.js": {
+          "size": 4740,
+          "sha256": "ff914084b03c669e101d35406a65b5d1f3b1ce2415a1d9c4201fb941546361e5",
+          "sri": "sha384-54Bbev7QKXnBQhIkYxiQR1MepPBNAkiaWDiB7cjzsYp4Cjc4b64xhYeYiSiaNjHZ"
+        },
+        "min/vs/basic-languages/ruby/ruby.js": {
+          "size": 9327,
+          "sha256": "69da50c3194c76a3530dc36309ea85a933c75aa9e7058cf29e7516ac80951729",
+          "sri": "sha384-B5neM77m4I/DEdAZzrkl/3pws0Nhgs04wK/wfbO27T6DfOzxgi6fBihLl26LZ+HH"
+        },
+        "min/vs/basic-languages/rust/rust.js": {
+          "size": 4983,
+          "sha256": "37dc707b3ea97d761a3bab49359d32fd7b641f58bad4e2fd8c4c1cd0800cb4d2",
+          "sri": "sha384-UGZL96TQ5ZgZriICAd3KKz5/2KGwFR/ytRoEWGubDVjFocjVFb6Ct+yb0L1OhPZ1"
+        },
+        "min/vs/basic-languages/sb/sb.js": {
+          "size": 2648,
+          "sha256": "acfd18f27b1cc052d78cb7a762ba9502e9fd4d9292e7e2b271302a8377a445bb",
+          "sri": "sha384-Xn1snDC/bAPyT81YRts61sPPUzFhsOtAWkmPWAoMsc2uyl7gsF/XO57TcWgCHfSq"
+        },
+        "min/vs/basic-languages/scala/scala.js": {
+          "size": 8143,
+          "sha256": "d513b09bbfbc050b372beac78e2584608212046ad068a08f8ab4e0dd1207b621",
+          "sri": "sha384-zRdgC2VEqZnwi1lo9YVz6UEe1L3z/Ujp1Jze5vIqtcR1edHRITq8s9N3pkp5fKnv"
+        },
+        "min/vs/basic-languages/scheme/scheme.js": {
+          "size": 2594,
+          "sha256": "8b78b406fbe3040658387262678eeb00e2029c7a767a4212590130ae0686551d",
+          "sri": "sha384-qZsIBPhG7VcT+1IZL2pPMBA9NDYm12wKo5GPvebzN7BZDF56FDc5wyxsvk9zv3Sz"
+        },
+        "min/vs/basic-languages/scss/scss.js": {
+          "size": 7232,
+          "sha256": "6cf67bc2644efec58329cf02036c11215524007fe09ac2460ab46989bc6ae3cf",
+          "sri": "sha384-2wrmc++JXHUO/DCwmKOCyPOn9CJ5wWavPdNmr+VrCMVqQfWVQWEASItlWMjD2Byw"
+        },
+        "min/vs/basic-languages/shell/shell.js": {
+          "size": 3898,
+          "sha256": "fd62075e804809482b0ffa432f40b927564527fc4150f5251072e8ac455a6886",
+          "sri": "sha384-/N/jEriMC282caPhXk6QZoagHMegKlMgMyjEUoLF23qjiM1dugczDR7xWJNA8Qde"
+        },
+        "min/vs/basic-languages/solidity/solidity.js": {
+          "size": 19428,
+          "sha256": "5dee98e9f5a38c98589fdbc594f9f5461f7ec9792d76ede6270218e77ebc75e9",
+          "sri": "sha384-u8Ep9FB5xi8QHqHnFG/jIQVS9hM1xabdlf/dcGFzmG5aXcTHmyxjflyhdztjEsHq"
+        },
+        "min/vs/basic-languages/sophia/sophia.js": {
+          "size": 3591,
+          "sha256": "3e3f4067b39cc667b3bac7da769dd811650c7c9dc9e074362ab7e7d1c5b47c5f",
+          "sri": "sha384-uiYPsmfoNoy85NyVC+XLdSl+Bz487sNshzUGkMJG6da/0ZLADSAGZpaw1K+9Q2ay"
+        },
+        "min/vs/basic-languages/sparql/sparql.js": {
+          "size": 3379,
+          "sha256": "da82319ca8f88c2cca55b324b07390b558669b1b96cd540cf808425c1b9faca5",
+          "sri": "sha384-DqaY/mFurnXOv22ArGpG7isIP4z8BgOOKt33jneK3O2pvamjNlA9Fclg6YlReZbg"
+        },
+        "min/vs/basic-languages/sql/sql.js": {
+          "size": 11118,
+          "sha256": "17d3fa62658c8d29a806dbf786b8b5f90f913845daa18b24896710164a1661d8",
+          "sri": "sha384-fDR6TWhcDPO+n5kurZeYa0feofNf58DFqCS7A/UaFfzmVRoTwXNtZFaOZBLB0w+W"
+        },
+        "min/vs/basic-languages/st/st.js": {
+          "size": 8222,
+          "sha256": "9607a2e6eef6cc1a195b23885a7138b539f1b08b83033769ec4a130c8d42d649",
+          "sri": "sha384-rhBvftk0XLN/SEl3cp/S5yM6iE9CCAQbXUOQHFKJ6Xs4GYTjG6PXaEoUPydBMZ5p"
+        },
+        "min/vs/basic-languages/swift/swift.js": {
+          "size": 5997,
+          "sha256": "cdc358689959b892a4b0a0d284e405adc22603bf9a8202fd8d4d1e4a0d16ae9a",
+          "sri": "sha384-coXSxbC4kvcy5lwU4HYi3ZuisIUPf47V8e2aeoSjkpwYFdWAdAJMBTA9y2KF3Y/4"
+        },
+        "min/vs/basic-languages/systemverilog/systemverilog.js": {
+          "size": 8444,
+          "sha256": "c570635e92cfe48a6795319a366b550126126d23277d6157aa58b260a3e34f84",
+          "sri": "sha384-fMPaMRog0Qz7Nx+pMzhtB/o+1L8GxNxNgJyTfGL3LsPaGG1zS/uGpPpZfGFPAO/5"
+        },
+        "min/vs/basic-languages/tcl/tcl.js": {
+          "size": 4392,
+          "sha256": "44ae6a3a45937c23d03704880a81acb3bcc1f511303b0d8105ff68a68db1e1a7",
+          "sri": "sha384-dVQN3XQmZIB4fYhYsX34H92UAhvzCpuWVaqDspIqTFU14VmvRe85NLtbQnhI1dO1"
+        },
+        "min/vs/basic-languages/twig/twig.js": {
+          "size": 6796,
+          "sha256": "d24fa72811b4a2f80b4f596f78042c03045df005c80ff9716693ce4b1b5ce409",
+          "sri": "sha384-PjeoFzRzXbOnPLN0NJvTOca3zWBGDm4QBFFcKlaAgAu4R2cD32R6Hz7zWHyT5ECC"
+        },
+        "min/vs/basic-languages/typescript/typescript.js": {
+          "size": 6460,
+          "sha256": "c4da8cd5fa6ea11fb7e9734f512b848877c1b5bf7f0faea76402ceb4da618887",
+          "sri": "sha384-iZuX5uXpRo9b1ck7XqemCF1yKsRAsKtYvzJabNVTOK67tY1ZB+ZG9Zum6mNnDf81"
+        },
+        "min/vs/basic-languages/typespec/typespec.js": {
+          "size": 3627,
+          "sha256": "4e0eddfae2fc8524a552056f6f7efa2b4d0fe422952664fbe1c5bcc0493c84d1",
+          "sri": "sha384-zpwB/Ju2vmtVsRZ+C6TFzocFHZtTMt/K6XcBmXDxznozOVWCg4/eaVFgMDAzoq4D"
+        },
+        "min/vs/basic-languages/vb/vb.js": {
+          "size": 6610,
+          "sha256": "93fbb1402356f40341924c2de339c9def343b949220ef065cca9f97ee896a30d",
+          "sri": "sha384-8BU8gKYOxcoY8vaFflsQwJeTfcj/N8i+b06doImeFRv2aVidfpQ5WKZcRYj69b1J"
+        },
+        "min/vs/basic-languages/wgsl/wgsl.js": {
+          "size": 8146,
+          "sha256": "b5044b6ae1d2c58fa4c3a944c3d52632a88366bc0f22aa4e2e0e8da12e727f8e",
+          "sri": "sha384-yxKwwA+96a57x11UPwdQ2+asEbgqPFEg0xYeDI9ZwcBMps8JhH7KJM9N9q3ZwduO"
+        },
+        "min/vs/basic-languages/xml/xml.js": {
+          "size": 3452,
+          "sha256": "d5cc3332e96b3300636a1677e535d16e8fa444538dcea17abe7b7ccdba6aab55",
+          "sri": "sha384-ycCvuJVG2aHDFfOmfY+nFa9xCKYVBOr6VIawxPGVj4y0/39/yhAm1XuUP0NSA8l7"
+        },
+        "min/vs/basic-languages/yaml/yaml.js": {
+          "size": 5056,
+          "sha256": "f4407dcc5601eec349552548557f3656a907b094575e7395402390aa08f8d7f2",
+          "sri": "sha384-xooTL+fT4QcZM34MAF40XoZNk2YQ7Vjw8kle2rJlIjsvUW8D417YeObfR3jY7Trd"
+        },
+        "min/vs/editor/editor.main.css": {
+          "size": 131858,
+          "sha256": "857bc0beafefbcc83ab5cf3510e929391c0314add43ee1a4cb8ecaf4726abbac"
+        },
+        "min/vs/editor/editor.main.js": {
+          "size": 3766654,
+          "sha256": "90b588bc0b624e24052a576e1bcab2eaffec7bc666895188862eebd9c9745782",
+          "sri": "sha384-fj9z+NUc93I3woCCy5IRQfrQ8Amu1E27tllwgb5gz3d9Vr1ymS13xcF6two3e4KH"
+        },
+        "min/vs/language/css/cssMode.js": {
+          "size": 33094,
+          "sha256": "4d30d446fe1afe1e93325c6e2f363e67f4ca402fec5fccbb66b9a6342b191930",
+          "sri": "sha384-gMDCNqTq+dkncmqOFiNW7sqCt2fH8mxCO7+/nbFLVca+cdgE22laPIu6q0RExhnT"
+        },
+        "min/vs/language/css/cssWorker.js": {
+          "size": 778035,
+          "sha256": "83e129c073104332b16b9bdc69dca3446534abd77aa6a9edc63b7b957f6816f1",
+          "sri": "sha384-m8TciMwFa+bZgwb2pCjttg37hKsOj3TUYbnmLZiNO09CKG5DvQP9qSw4ONblZbyI"
+        },
+        "min/vs/language/html/htmlMode.js": {
+          "size": 33634,
+          "sha256": "0766d33510c464c14f09607a8fe85c1925c0b827844b72a87742e9b37af310bb",
+          "sri": "sha384-Z9mTGgULWBO8nB9wxfnGZdn4P9qF71glrS7iDOU6xtIDyMAa5+AW3JJHjA03wDPQ"
+        },
+        "min/vs/language/html/htmlWorker.js": {
+          "size": 449070,
+          "sha256": "2c246b7c0288fe575bc3bc187fe394a3ac27c2e7db7df52f154b5ac39097a67c",
+          "sri": "sha384-EqeN2jIwf6xy3w4wgD0AbbPnLw2+e4iuoyEqJtOrglJkAaxij0hUzG/Dh5R4iQ45"
+        },
+        "min/vs/language/json/jsonMode.js": {
+          "size": 42545,
+          "sha256": "9200ffce4ac390675f6cb4c64ffaf4b4d8e650d3888caf631709cb136615e379",
+          "sri": "sha384-ON1D6f/k0tR0oeAaqJbcIQ+nw97pg7oOWAmzv8Sl6I8h6ECs2Mh8MSj1X5nq0Y60"
+        },
+        "min/vs/language/json/jsonWorker.js": {
+          "size": 131177,
+          "sha256": "4b197c4165e356a04857e9317ec3d536fdbb92b91077bc483590c4f51056e3df",
+          "sri": "sha384-/M5NNHL+L6fCC4tQ8EFet5L5vSTDWm2ek99a2GPG6pjKDGBBtjvCAgGcfcsw6jOp"
+        },
+        "min/vs/language/typescript/tsMode.js": {
+          "size": 23919,
+          "sha256": "fb2707ee84013e2be4c58f5654e3d623ccf73cfc33dbcdd0bf82a780945cfcf1",
+          "sri": "sha384-LJDXVt7WHdcjvmrQwGPaDPpsAmD0FfVF59daseEl2Ifa/jHppeHXJeJzBPLScQ/e"
+        },
+        "min/vs/language/typescript/tsWorker.js": {
+          "size": 5749518,
+          "sha256": "ffdf8b0d4d41c145afae6919beba110336860759dce0bdadc2a145c06a1a48ed",
+          "sri": "sha384-zxA6if3z1xYplirytIKRk7JyAbAW634/ADgNtSvYwCdedcuLuz8EApt3TC4PsUGB"
+        },
+        "min/vs/loader.js": {
+          "size": 30051,
+          "sha256": "28f3584fd04b182dfce15a9a1ce35b25bea22b31464aee500372bed18b7fee1a",
+          "sri": "sha384-pHG02SG8pId94Np3AbPmBEJ1yPqaH0IkJGLSNGXYmuGhkazT8Lr/57WYpbkGjJtu"
+        },
+        "min/vs/nls.messages.de.js": {
+          "size": 119967,
+          "sha256": "7d3663431bcb00ff23e79181ad36e1f8ef09e2d2ad636eef05acf357779ebc35",
+          "sri": "sha384-liRNo/x/FY6EhiGQGP4kozUFdpOAfizRpCyxnYTYp1qGhGT4in/u8rB3HWeHnTOD"
+        },
+        "min/vs/nls.messages.es.js": {
+          "size": 120624,
+          "sha256": "dc0747303240ad82f821d167a47e2e6713ba7c5f7a9f10ddd386ccd66e756a2f",
+          "sri": "sha384-ruGSfUCA/odINw4+ZLRMd9iD1KWXQI2X8Z5oLQILHS6SZxzl+getVhArzM7E79Ye"
+        },
+        "min/vs/nls.messages.fr.js": {
+          "size": 133124,
+          "sha256": "ebc0552b03c7e245c4224e7d4c0bc68c225c56b0cbee8066e263447c69e5642d",
+          "sri": "sha384-9qmn5EKIVBgBsInpg95vtp/AutKQ2Pex2vvmTkE+CXkE0e9+xdJWUA06szqTMRaF"
+        },
+        "min/vs/nls.messages.it.js": {
+          "size": 122202,
+          "sha256": "0e6c73b8774c833a990554ead25cbe661b1dc0f5f1da6944ecd267d4104eb2d8",
+          "sri": "sha384-2Iezf6YQQaiiVpcFbWZY1fJwvanA5FAsxeZKPXhMKBqlNqEOhgatr2nYFAf4S9so"
+        },
+        "min/vs/nls.messages.ja.js": {
+          "size": 256463,
+          "sha256": "47452b43fe520fb5b032c3bea212641ff9e3798cf85487038ed24c4268b30757",
+          "sri": "sha384-cFJpeMGbBJWixWEe4+uu586VCQdScSfgNz908DgPVZGgF8UyoB8VVGJQ5t0IkBE6"
+        },
+        "min/vs/nls.messages.ko.js": {
+          "size": 210086,
+          "sha256": "1afadd53fe7aca015667d178fe0e39dbbad83c2cb5507ffed28da2576f640b06",
+          "sri": "sha384-QmOtqqe3nP2SEE5+pS3iy1N82/LD6BsPH4OaWfKTY4AZj5jArs84DNMxc/EWjAST"
+        },
+        "min/vs/nls.messages.ru.js": {
+          "size": 538578,
+          "sha256": "b80e1fedccf097cb5c5b99d6bc6acc2e584b5dffdca80d62ec980fb85400b141",
+          "sri": "sha384-mUYvj1OQ4H3rpSo/zRqTXFnQ/qM74FrFIR4vK5oVcfBeVAxpkvLpo1RfZzuIiHi7"
+        },
+        "min/vs/nls.messages.zh-cn.js": {
+          "size": 157372,
+          "sha256": "a263c87401fe71aa24da1abd78cbca7e71a48475ba6c1a36aaf8d636f15661d5",
+          "sri": "sha384-Vef+Wq20vCAsAakfhyJ6fj1PQhLQzu4e6NZ24bp9wGTDPdvbNuRqOYMoH+9T9KQR"
+        },
+        "min/vs/nls.messages.zh-tw.js": {
+          "size": 161126,
+          "sha256": "a61e221b8f8ec102db26c8d10a12908d7619ac1af649e68243d6144a784c64e6",
+          "sri": "sha384-/5/umIM7IvrZ6Q2aPnIOBi9yk7EwQFLrK1uNh974Kumgeh60uLtwdDvMfj2B8NWc"
+        }
+      },
+      "sriIn": {
+        "min/vs/loader.js": "js/ide.js"
+      }
+    },
+    "@xterm/xterm@5.5.0": {
+      "name": "@xterm/xterm",
+      "version": "5.5.0",
+      "license": "MIT",
+      "source": "npm",
+      "tarball": "https://registry.npmjs.org/@xterm/xterm/-/xterm-5.5.0.tgz",
+      "usedBy": "js/terminal.js. The package publishes a UMD build only; lib/xterm.esm.js is the generated ES module around it (third-party.mjs `wrap`), so Monaco's AMD define is never touched",
+      "select": [
+        "css/xterm.css"
+      ],
+      "wrap": [
+        {
+          "file": "lib/xterm.js",
+          "out": "lib/xterm.esm.js",
+          "exports": [
+            "Terminal"
+          ]
+        }
+      ],
+      "licenses": {
+        "LICENSE": {
+          "from": "package"
+        }
+      },
+      "integrity": "sha512-hqJHYaQb5OptNunnyAnkHyM8aCjZ1MEIDTQu1iIbbTD/xops91NB5yq1ZK/dC2JDbVWtF23zUtl9JE2NqwT87A==",
+      "files": {
+        "LICENSE": {
+          "size": 1261,
+          "sha256": "b569f629d00f2626a8100df2a1798210535621e42164dfd426a6fe5aac7b0ccd"
+        },
+        "css/xterm.css": {
+          "size": 5559,
+          "sha256": "ba8e6985669488981ccf40c0cefe3aba80722cb6c92de7ad628b0bd717faf2b6"
+        },
+        "lib/xterm.esm.js": {
+          "size": 289859,
+          "sha256": "ce0c170934f02d426fea9cf04861d65538f54ab9ff68fc540f63e0de7e39e275",
+          "sri": "sha384-cqpLQ/yNOVhviJRoVSt5nJiXhARy5BIACAJIx8KMBGFqrkkolNNpI/c59wDaD3/R"
+        }
+      }
+    },
+    "@xterm/addon-fit@0.10.0": {
+      "name": "@xterm/addon-fit",
+      "version": "0.10.0",
+      "license": "MIT",
+      "source": "npm",
+      "tarball": "https://registry.npmjs.org/@xterm/addon-fit/-/addon-fit-0.10.0.tgz",
+      "usedBy": "js/terminal.js (same generated ES module as @xterm/xterm)",
+      "wrap": [
+        {
+          "file": "lib/addon-fit.js",
+          "out": "lib/addon-fit.esm.js",
+          "exports": [
+            "FitAddon"
+          ]
+        }
+      ],
+      "licenses": {
+        "LICENSE": {
+          "from": "package"
+        }
+      },
+      "integrity": "sha512-UFYkDm4HUahf2lnEyHvio51TNGiLK66mqP2JoATy7hRZeXaGMRDr00JiSF7m63vR5WKATF605yEggJKsw0JpMQ==",
+      "files": {
+        "LICENSE": {
+          "size": 1103,
+          "sha256": "e256f01188af527e4d06d21d06fbf785ae9c50d4b328bf03cbe0ba7f0aa4228f"
+        },
+        "lib/addon-fit.esm.js": {
+          "size": 1924,
+          "sha256": "b8ca9e57ed889150a94f8a9fc411d438f1100b9750d73a65173a000567c9bbeb",
+          "sri": "sha384-GMTzrEwPiC73YSyGAWVo3vx4t/ZVzVLLCFXlOPXUFlbdVAoVBK/oGeqHTzh28/yf"
+        }
+      }
+    },
+    "vscode-oniguruma@2.0.1": {
+      "name": "vscode-oniguruma",
+      "version": "2.0.1",
+      "license": "MIT",
+      "source": "npm",
+      "tarball": "https://registry.npmjs.org/vscode-oniguruma/-/vscode-oniguruma-2.0.1.tgz",
+      "usedBy": "js/ext/grammars.js: onig.wasm (its JavaScript, release/main.js, is already in js/ext/vendor/ with its licence)",
+      "select": [
+        "release/onig.wasm"
+      ],
+      "licenses": {
+        "LICENSE.txt": {
+          "from": "package"
+        },
+        "NOTICES.txt": {
+          "from": "package"
+        }
+      },
+      "integrity": "sha512-poJU8iHIWnC3vgphJnrLZyI3YdqRlR27xzqDmpPXYzA93R4Gk8z7T6oqDzDoHjoikA2aS82crdXFkjELCdJsjQ==",
+      "files": {
+        "LICENSE.txt": {
+          "size": 1102,
+          "sha256": "ddde8aba8fe72b4830e27901fc78733eb6db7b6c653161075de213a6adeda3fd"
+        },
+        "NOTICES.txt": {
+          "size": 2273,
+          "sha256": "615d94d89eacc046241518c247f6650a5df80d1adf4b284a756f500867620b35"
+        },
+        "release/onig.wasm": {
+          "size": 473151,
+          "sha256": "76ebc1f0d87b2e7449a45ff3cd1a1546a9f05f54bdac44ee03e8a2b8348897be"
+        }
+      }
+    },
+    "3d-force-graph@1.80.2": {
+      "name": "3d-force-graph",
+      "version": "1.80.2",
+      "license": "MIT",
+      "source": "npm",
+      "tarball": "https://registry.npmjs.org/3d-force-graph/-/3d-force-graph-1.80.2.tgz",
+      "usedBy": "js/arch.js (the architecture graph), a classic script; 1.80.2 is what the CDN served for 3d-force-graph@1",
+      "select": [
+        "dist/3d-force-graph.min.js"
+      ],
+      "classic": [
+        "dist/*"
+      ],
+      "licenses": {
+        "LICENSE": {
+          "from": "package"
+        }
+      },
+      "integrity": "sha512-hStm8c4s2yLt0kj9JBLWLgLsJlS+G08AXTNeEw6YBD1kzCu4s1szwAZL9Z1tcPhVOlDkWliUzTuraBF86TmNCQ==",
+      "files": {
+        "LICENSE": {
+          "size": 1072,
+          "sha256": "7262e566e874d1ce8cfadace01d4f635f8d704b6bdf7b4345cc028e5faeafded"
+        },
+        "dist/3d-force-graph.min.js": {
+          "size": 1389818,
+          "sha256": "ae9b5ca9d525095978d0f5d23f9136dfe177b2e949773102ffbf145dd7776f04",
+          "sri": "sha384-GBG/VW3/k9nOKHgDlgS2DFk3HDPeNndiVa5280Guy62u3QEpZQPuAuB4POI5giZN"
+        }
+      },
+      "sriIn": {
+        "dist/3d-force-graph.min.js": "js/arch.js"
+      }
+    },
+    "@huggingface/transformers@4.3.2": {
+      "name": "@huggingface/transformers",
+      "version": "4.3.2",
+      "license": "Apache-2.0",
+      "source": "npm",
+      "tarball": "https://registry.npmjs.org/@huggingface/transformers/-/transformers-4.3.2.tgz",
+      "usedBy": "js/providers/onnx.js (the ONNX chat models) and js/embed.js (embeddings), through js/tf-runtime.js. 4.3.2 is what cdn.jsdelivr.net/npm/@huggingface/transformers@4 served (dist/transformers.min.js, ONNX Runtime's JavaScript bundled in); its WebAssembly is the ONNX Runtime entry below",
+      "select": [
+        "dist/transformers.min.js"
+      ],
+      "licenses": {
+        "LICENSE": {
+          "from": "package"
+        },
+        "bundled/@huggingface/jinja/LICENSE": {
+          "from": "github",
+          "repo": "huggingface/huggingface.js",
+          "commit": "6fca37c92522e9142c219ddb049c4112cebe0cd1",
+          "file": "LICENSE",
+          "license": "MIT",
+          "note": "bundled in dist/transformers.min.js (the same licence the media SDK ships for its copy)",
+          "gitOid": "a3ce68eb3a1d6900bebd200d107c47769642a3c1"
+        }
+      },
+      "integrity": "sha512-V3+dqf3iWlRYJ9I9GreM3zGQd0lAXnnoPeddmkOQYWAEE4l/+Fi6p7tx/qVUJlKQgLXGim2W76rTOzz+eC0i7g==",
+      "files": {
+        "LICENSE": {
+          "size": 11358,
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+        },
+        "bundled/@huggingface/jinja/LICENSE": {
+          "size": 1069,
+          "sha256": "d6e7b19451c1b3d1d66353bb4b1274138953b3bfd9ae60c56e77b1f548796982"
+        },
+        "dist/transformers.min.js": {
+          "size": 587917,
+          "sha256": "8b5a3171f8876bab2b1820a7d65eb87628e3d30bb5ea85b9dd398e76eb34decb",
+          "sri": "sha384-xFDNfwR3J/vPYzGjMr1VSM8LHIcA+ii2Ha4x+6WAuISKpT9I0dxgF/mVQW+I0kSd"
+        }
+      }
+    },
+    "onnxruntime-web@1.31.0-dev.20260914-8d85527a0": {
+      "name": "onnxruntime-web",
+      "version": "1.31.0-dev.20260914-8d85527a0",
+      "license": "MIT",
+      "source": "npm",
+      "tarball": "https://registry.npmjs.org/onnxruntime-web/-/onnxruntime-web-1.31.0-dev.20260914-8d85527a0.tgz",
+      "usedBy": "the WebAssembly (and its loader) of the ONNX Runtime bundled in @huggingface/transformers@4.3.2, the exact build it names (env.backends.onnx.versions.web); the CDN served it from onnxruntime-web@<that version>/dist/",
+      "select": [
+        "dist/ort-wasm-simd-threaded.asyncify.mjs",
+        "dist/ort-wasm-simd-threaded.asyncify.wasm"
+      ],
+      "classic": [
+        "dist/*"
+      ],
+      "licenses": {
+        "LICENSE": {
+          "from": "github",
+          "repo": "microsoft/onnxruntime",
+          "commit": "8d85527a010e294a26b274749f74294b2a32cec5",
+          "file": "LICENSE",
+          "note": "the package ships no licence file; LICENSE of the repository at the commit this build names",
+          "gitOid": "48bc6bb4996ac924359e8e28b9ae88970e5ed3fc"
+        },
+        "ThirdPartyNotices.txt": {
+          "from": "github",
+          "repo": "microsoft/onnxruntime",
+          "commit": "8d85527a010e294a26b274749f74294b2a32cec5",
+          "file": "ThirdPartyNotices.txt",
+          "gitOid": "75af6ad7e3db5c34e9ff923734ea49056c578d5f"
+        }
+      },
+      "integrity": "sha512-Iy7rtadoBgxS/LLvDr3QW38DB1PNXRnr0GJMcL0TAt7c9qjgVQl83UlGCVyeAnK2InpmW8Uc3PL8XIuqtDeF6g==",
+      "files": {
+        "LICENSE": {
+          "size": 1073,
+          "sha256": "2f07c72751aed99790b8a4869cf2311df85a860b22ded05fa22803587a48922c"
+        },
+        "ThirdPartyNotices.txt": {
+          "size": 338088,
+          "sha256": "143764b952fdb1a7c69ce653bfba74a7744d6a8a573bfb73e235fba356c83de3"
+        },
+        "dist/ort-wasm-simd-threaded.asyncify.mjs": {
+          "size": 53057,
+          "sha256": "0966b6105cd936744498aa60df7a22cbd47af3374dbc64a9ab561c08a71e3611",
+          "sri": "sha384-ik7L7J2uXfXmGuWHh3yOUDPpUslz/dJjcvZgdX5hcItLjxlkEpUF7mpCcATr3Dg8"
+        },
+        "dist/ort-wasm-simd-threaded.asyncify.wasm": {
+          "size": 26861777,
+          "sha256": "49871f5a4409519797e127440868a6d1923339d9185907f301a5b2a1d90af082"
+        }
+      }
+    }
+  }
+}

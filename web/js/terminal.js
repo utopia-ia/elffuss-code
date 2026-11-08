@@ -9,22 +9,26 @@ let term = null, fit = null, ready = false;
 let Terminal = null, FitAddon = null;
 let line = '', pos = 0, histIdx = -1, busy = false;
 let enCurso = null;   // AbortController del comando que se está ejecutando
-const XT = '@xterm/xterm@5.5.0', FIT = '@xterm/addon-fit@0.10.0';
+// xterm fijado y servido desde este origen (web/vendor/third-party/, PIN.json).
+const XT = new URL('../vendor/third-party/@xterm/xterm@5.5.0/', import.meta.url).href;
+const FIT = new URL('../vendor/third-party/@xterm/addon-fit@0.10.0/', import.meta.url).href;
 
 // IMPORTANTE: cargamos xterm como ESM, no UMD. Monaco trae un loader AMD
 // (define/require) y la build UMD de xterm se registra como «define anónimo»
 // en vez de exponer window.Terminal → «Can only have one anonymous define».
-// El import ESM esquiva por completo el define de Monaco.
+// El paquete solo publica la UMD: lib/xterm.esm.js es el módulo que la envuelve
+// (third-party.mjs, «wrap»), con module/exports/define propios, así que el
+// define de Monaco ni se toca.
 async function loadXterm() {
   if (Terminal) return;
   if (!document.getElementById('xterm-css')) {
     const l = document.createElement('link');
-    l.id = 'xterm-css'; l.rel = 'stylesheet'; l.href = `https://cdn.jsdelivr.net/npm/${XT}/css/xterm.min.css`;
+    l.id = 'xterm-css'; l.rel = 'stylesheet'; l.href = XT + 'css/xterm.css';
     document.head.appendChild(l);
   }
   const [xt, ft] = await Promise.all([
-    import(`https://cdn.jsdelivr.net/npm/${XT}/+esm`),
-    import(`https://cdn.jsdelivr.net/npm/${FIT}/+esm`),
+    import(XT + 'lib/xterm.esm.js'),
+    import(FIT + 'lib/addon-fit.esm.js'),
   ]);
   Terminal = xt.Terminal || (xt.default && xt.default.Terminal);
   FitAddon = ft.FitAddon || (ft.default && ft.default.FitAddon) || ft.default;

@@ -7,7 +7,9 @@
 import * as code from './tools/code.js';
 
 const CODE_EXT = /\.(js|mjs|cjs|jsx|ts|tsx|py|go|rs|java|c|h|cpp|hpp|vue|svelte)$/i;
-const FG_URL = 'https://cdn.jsdelivr.net/npm/3d-force-graph@1/dist/3d-force-graph.min.js';
+// 3d-force-graph fijado y servido desde este origen (web/vendor/third-party/, PIN.json); se comprueba su sha384.
+const FG_URL = new URL('../vendor/third-party/3d-force-graph@1.80.2/dist/3d-force-graph.min.js', import.meta.url).href;
+const FG_SRI = 'sha384-GBG/VW3/k9nOKHgDlgS2DFk3HDPeNndiVa5280Guy62u3QEpZQPuAuB4POI5giZN';
 // paleta por capa (carpeta de primer nivel), estilo CodeFlow
 const LAYER_COLORS = ['#7c5cff', '#49e8ff', '#ff4d8d', '#3fb970', '#ffd479', '#ff9f45', '#a86cff', '#42b883', '#e34c26', '#00add8'];
 
@@ -43,7 +45,7 @@ const loadFG = () => window.ForceGraph3D ? Promise.resolve() : new Promise((res,
   window.define = undefined;
   const restore = () => { window.define = savedDefine; };
   const s = document.createElement('script');
-  s.src = FG_URL;
+  s.src = FG_URL; s.integrity = FG_SRI;
   s.onload = () => { restore(); window.ForceGraph3D ? res() : rej(new Error('3d-force-graph cargó pero no expuso ForceGraph3D')); };
   s.onerror = () => { restore(); rej(new Error('no cargó 3d-force-graph')); };
   document.head.appendChild(s);

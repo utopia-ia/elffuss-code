@@ -11,6 +11,7 @@
 //   3. Si la propuesta ya no está: se dice y se abre la Mente.
 //
 //   BASE=http://localhost:8799 node tests/notif-run.mjs
+import { sinIntegridad } from './lib/sin-integridad.mjs';
 import { chromium } from 'playwright';
 const BASE = process.env.BASE || 'http://localhost:8799';
 let fails = 0; const ok = (n, c, e = '') => { console.log((c ? '✅' : '❌') + ' ' + n + (e ? '  — ' + e : '')); if (!c) fails++; };
@@ -40,7 +41,10 @@ async function abre({ modelo, sembrar = true, id = 'abc123def' }) {
   }, modelo);
   const p = await ctx.newPage({ viewport: { width: 1400, height: 900 } });
   p.on('pageerror', e => errs.push(e.message.slice(0, 160)));
-  await p.route(/cdn\.jsdelivr\.net\/npm\/@huggingface\/transformers@4/, r => r.fulfill({ status: 200, contentType: 'text/javascript', body: FALSO_TF }));
+  // transformers.js es la copia fijada de web/vendor/third-party/ que importa js/tf-runtime.js; el doble necesita
+  // que su hash salga del import map (lib/sin-integridad.mjs).
+  await sinIntegridad(p, BASE, /@huggingface\/transformers@/);
+  await p.route(/\/vendor\/third-party\/@huggingface\/transformers@[^/]+\/dist\/transformers\.min\.js$/, r => r.fulfill({ status: 200, contentType: 'text/javascript', body: FALSO_TF }));
   await p.goto(BASE + '/manifest.json');
   if (sembrar) await p.evaluate(async ({ id, md }) => { await (await caches.open('elffuss-notif')).put('./notif/' + id, new Response(md)); }, { id, md: MD });
   await p.goto(BASE + `/?test-opfs&notif=execute&id=${id}`, { waitUntil: 'domcontentloaded' });
