@@ -2,6 +2,8 @@
 import * as code from './code.js';
 import * as shell from '../shell.js';
 import * as web from './web.js';
+import * as github from './github.js';
+import * as skills from '../skills.js';
 import { anunciar, tocaFichero } from '../actividad.js';
 import { entradas as memoryEntradas } from './memory.js';
 import { alRegistrarHerramientas, hoy } from '../memory-wire.js';
@@ -27,6 +29,15 @@ export const TOOLS = {
   // Imagen, música, voz y vídeo, hechos en este navegador con el SDK de elffuss-ai (tools/media.js); con `path`, el
   // fichero se guarda además en el proyecto. La descripción es la del chat de elffuss.com: el prompt va en inglés.
   ...mediaToolEntries(uiLang() === 'es' ? 'es' : 'en'),
+  'github.connect': { desc: 'Conectar la cuenta de GitHub del usuario (abre la ventana de inicio de sesión de GitHub)', params: {}, run: () => github.connect() },
+  'github.fork':    { desc: 'Preparar el fork del chat de Elffuss en el GitHub del usuario (lo crea o lo pone al día)', params: {}, run: () => github.fork() },
+  'github.read':    { desc: 'Leer un fichero (o listar una carpeta) del fork del chat', params: { path: 'ruta, p. ej. chat/chat.css' }, run: a => github.read(a) },
+  'github.write':   { desc: 'Escribir un fichero ENTERO en el fork del chat (un commit)', params: { path: 'ruta', content: 'contenido completo del fichero', message: 'qué cambia, en una línea' }, run: a => github.write(a) },
+  'github.publish': { desc: 'Publicar el fork en GitHub Pages y esperar a que esté en línea; devuelve su dirección', params: {}, run: () => github.pages() },
+  'github.pr':      { desc: 'Proponer el cambio a la versión oficial de Elffuss (abre una pull request)', params: { title: 'título corto', body: 'qué se pidió y qué se ha cambiado' }, run: a => github.pr(a) },
+  'skill.create':   { desc: 'CREAR una skill propia: instrucciones especializadas que seguirás siempre', params: { name: 'nombre corto', description: 'para qué sirve', instructions: 'instrucciones detalladas en markdown' }, run: a => skills.createSkill(a) },
+  'skill.list':     { desc: 'Ver las skills instaladas', params: {}, run: async () => skills.installed().map(x => `• ${x.name}: ${x.description || ''}`).join('\n') || 'No hay skills instaladas' },
+  'skill.get':      { desc: 'Leer el contenido completo de una skill instalada', params: { name: 'nombre de la skill' }, run: async a => { const s = await skills.get(a.name); return s ? `# ${s.name}\n${s.description || ''}\n\n${s.content || ''}` : `No hay ninguna skill «${a.name}»`; } },
 };
 
 // Memoria compartida: memory-wire.js registra aquí las tres herramientas del
@@ -58,6 +69,8 @@ alRegistrarHerramientas(defs => {
 // verdad, para que renombrar uno no deje la excepción apuntando al aire.
 export const PARAM_EXACTO = {
   'code.write': ['content'],
+  'github.write': ['content'],
+  'skill.create': ['instructions'],
   'code.edit': ['search', 'replace'],
 };
 export const PARAM_NUMERO = {

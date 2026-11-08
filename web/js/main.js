@@ -8,6 +8,7 @@ import { initEditor, refreshTree, openFile, gotoLine, triggerEditor, hasEditor, 
 import { ACTIVITY, UI, brainIcon, dictIcon, gpuIcon } from './icons.js';
 import { renderMarkdown } from './md.js';
 import * as skills from './skills.js';
+import * as mejora from './mejora.js';
 import * as terminal from './terminal.js';
 import * as shell from './shell.js';
 import { setTerminalEcho } from './tools/index.js';
@@ -142,6 +143,15 @@ function linkifyFilePaths(root) {
 //   #/lab                el banco de pruebas (lab.html)
 // Antes solo existía #/file; lo demás no tenía forma de enlazarse.
 function abreDesdeHash() {
+  // «Mejora Elffuss» desde el chat (#/mejora?pide=…): la skill instalada y la petición en la caja, para enviarla el
+  // usuario. Ver mejora.js.
+  const pide = mejora.leerPeticion();
+  if (pide) {
+    mejora.instalarSkill().then((nueva) => { if (nueva) $('statusbar').textContent = t('improveSkillInstalled', { name: mejora.SKILL_NAME }); })
+      .catch((e) => console.warn('[mejora] no se pudo instalar la skill:', e?.message || e));
+    mejora.prepararCaja(pide, t('improvePrefix'));
+    return;
+  }
   let h = location.hash;
   try { h = decodeURI(h); } catch { /* — */ }
   if (h === '#/lab') { location.replace('lab.html'); return; }
@@ -1905,6 +1915,14 @@ async function boot() {
     $('discard-clone-btn').onclick = async () => { await clearCloneJob(); banner.hidden = true; };
   } else if (job) {
     await clearCloneJob(); // job corrupto o ya completo: limpiar
+  }
+
+  // «Mejora Elffuss» (#/mejora?pide=…): el trabajo va al fork en GitHub, no a una carpeta. Sin un proyecto que se
+  // reabra solo, se entra con una carpeta del navegador, como «Probar en el navegador», para que haya chat.
+  if (/^#\/mejora\?/.test(location.hash)) {
+    const prevM = await codeTools.restoreProject();
+    if (prevM?.ready) return enterIDE(await db.get('kv', 'project'));
+    return enterIDE(await (await navigator.storage.getDirectory()).getDirectoryHandle('elffuss-improve', { create: true }));
   }
 
   // gancho de test: ?test-opfs usa el almacenamiento del navegador como proyecto
