@@ -289,7 +289,7 @@ export async function write({ path, content = '', _interno = false } = {}) {
         throw new Error(`Eso dejaría ${path} en ${ahora} líneas cuando tiene ${antes}: perderías el resto del fichero. ` +
           `Para cambiar una parte usa code.edit con «search» y «replace»; code.write solo para ficheros nuevos o reescrituras completas de verdad.`);
       }
-      revisaSintaxis(path, previo, content);
+      await revisaSintaxis(path, previo, content);
     }
   }
   if (!await approveWrite(path, content)) return `Cambio en ${path} rechazado por el usuario`;
@@ -369,18 +369,40 @@ function quitaNumerosDeLinea(txt) {
 // módulo. Solo se rechaza si el fichero estaba BIEN antes: si ya venía roto,
 // la edición es justamente lo que viene a arreglarlo.
 const ES_JS = /\.(js|mjs|cjs|jsx)$/i;
+//
+// El parseo va en un worker (tools/eval-worker.js) con una política propia: la
+// página de Code no permite evaluar código ('unsafe-eval'), y aquí new Function
+// lanzaría un EvalError, que la guarda tomaba por «se parsea» (o sea, apagada sin
+// avisar). Si el worker no contesta a tiempo, no se estorba la edición.
+const EVAL_WORKER = new URL('./eval-worker.js', import.meta.url);
+let parser = null, parseId = 0;
+const pendientes = new Map();
+function parserWorker() {
+  if (parser) return parser;
+  parser = new Worker(EVAL_WORKER, { type: 'module' });
+  parser.onmessage = ({ data }) => { const f = pendientes.get(data?.id); if (f) { pendientes.delete(data.id); f(data.r); } };
+  parser.onerror = () => { for (const f of pendientes.values()) f(true); pendientes.clear(); parser = null; };
+  return parser;
+}
 function seParsea(codigo) {
   const sinModulo = codigo
     .replace(/^\s*import\s+[^;]*;?\s*$/gm, '')
     .replace(/^\s*export\s+default\s+/gm, 'void ')
     .replace(/^\s*export\s*\{[^}]*\}\s*;?\s*$/gm, '')
     .replace(/^(\s*)export\s+/gm, '$1');
-  try { new Function(sinModulo); return true; } catch (e) { return e instanceof SyntaxError ? String(e.message) : true; }
+  return new Promise((resolve) => {
+    let w;
+    try { w = parserWorker(); } catch { resolve(true); return; }
+    const id = ++parseId;
+    const reloj = setTimeout(() => { if (pendientes.delete(id)) resolve(true); }, 3000);
+    pendientes.set(id, (r) => { clearTimeout(reloj); resolve(r); });
+    w.postMessage({ op: 'parse', id, code: sinModulo });
+  });
 }
-function revisaSintaxis(path, antes, despues) {
+async function revisaSintaxis(path, antes, despues) {
   if (!ES_JS.test(path)) return;
-  if (seParsea(antes) !== true) return;          // ya estaba roto: no estorbar
-  const mal = seParsea(despues);
+  if (await seParsea(antes) !== true) return;          // ya estaba roto: no estorbar
+  const mal = await seParsea(despues);
   if (mal !== true) {
     anota('rompeSintaxis', path, { error: String(mal).slice(0, 80) });
     throw new Error(`Esa edición dejaría ${path} sin poder cargarse (${mal}). ` +
@@ -440,7 +462,7 @@ export async function edit({ path, search, replace } = {}) {
       anota('sinCambio', path, { fase: 'exacta' });
       throw new Error(`La edición en ${path} no cambió nada: «search» y «replace» son iguales. Escribe en «replace» el código YA corregido.`);
     }
-    revisaSintaxis(path, current, siguiente);
+    await revisaSintaxis(path, current, siguiente);
     anota('exacta', path, {});
     return write({ path, content: siguiente, _interno: true });
   }
@@ -566,7 +588,7 @@ export async function edit({ path, search, replace } = {}) {
     anota('sinCambio', path, {});
     throw new Error(`La edición en ${path} no cambió nada — revisa «replace».`);
   }
-  revisaSintaxis(path, current, nextContent);
+  await revisaSintaxis(path, current, nextContent);
   return write({ path, content: nextContent, _interno: true });
 }
 
@@ -690,32 +712,17 @@ export async function run({ path, expr } = {}) {
   // módulo. La herramienta de comprobar le enseñó que lo correcto era incorrecto.
   // Y si aun así nombra algo que no existe, el error DICE qué hay exportado, en
   // vez de dejarle deducir que el fichero está roto.
-  const guion = `
-    self.onmessage = async ({ data }) => {
-      try {
-        const m = await import(data.url);
-        const nombres = Object.keys(m).filter(n => /^[A-Za-z_$][\\w$]*$/.test(n));
-        const fn = new Function('m', ...nombres, 'return (' + data.expr + ')');
-        const valor = await fn(m, ...nombres.map(n => m[n]));
-        let texto;
-        try { texto = JSON.stringify(valor); } catch { texto = String(valor); }
-        if (texto === undefined) texto = String(valor);
-        self.postMessage({ ok: true, tipo: typeof valor, texto });
-      } catch (e) {
-        let exporta = [];
-        try { exporta = Object.keys(await import(data.url)); } catch { /* ni carga */ }
-        self.postMessage({ ok: false, error: e.message, exporta });
-      }
-    };`;
-  const wUrl = URL.createObjectURL(new Blob([guion], { type: 'text/javascript' }));
-  const worker = new Worker(wUrl, { type: 'module' });
+  // Corre en tools/eval-worker.js (ver ahí): un worker de este origen con política
+  // propia, que puede evaluar la expresión e importar el blob: del módulo. Antes era
+  // un worker blob: con el código dentro, que la CSP de Code ya no deja arrancar.
+  const worker = new Worker(EVAL_WORKER, { type: 'module' });
   try {
     const r = await new Promise((resolve) => {
       // Un bucle infinito en el código del usuario no puede colgar el IDE.
       const reloj = setTimeout(() => resolve({ ok: false, error: `no terminó en ${RUN_MS} ms (¿bucle infinito?)` }), RUN_MS);
       worker.onmessage = e => { clearTimeout(reloj); resolve(e.data); };
       worker.onerror = e => { clearTimeout(reloj); resolve({ ok: false, error: e.message || 'error al cargar el módulo' }); };
-      worker.postMessage({ url, expr });
+      worker.postMessage({ op: 'run', url, expr });
     });
     if (r.ok) return `${expr} → ${r.texto}  (${r.tipo})`;
     // Un «X is not defined» sin más lleva al modelo a «el fichero está mal».
@@ -727,7 +734,6 @@ export async function run({ path, expr } = {}) {
     return `${expr} lanzó: ${r.error}${pista}`;
   } finally {
     worker.terminate();
-    URL.revokeObjectURL(wUrl);
     for (const u of hechos.values()) if (u) URL.revokeObjectURL(u);
   }
 }
