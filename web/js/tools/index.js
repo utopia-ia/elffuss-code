@@ -3,6 +3,7 @@ import * as code from './code.js';
 import * as shell from '../shell.js';
 import * as web from './web.js';
 import * as github from './github.js';
+import * as theme from './theme.js';
 import * as skills from '../skills.js';
 import { anunciar, tocaFichero } from '../actividad.js';
 import { entradas as memoryEntradas } from './memory.js';
@@ -29,6 +30,9 @@ export const TOOLS = {
   // Imagen, música, voz y vídeo, hechos en este navegador con el SDK de elffuss-ai (tools/media.js); con `path`, el
   // fichero se guarda además en el proyecto. La descripción es la del chat de elffuss.com: el prompt va en inglés.
   ...mediaToolEntries(uiLang() === 'es' ? 'es' : 'en'),
+  'elffuss.theme_get':   { desc: 'Ver el tema de «tu versión» del chat de elffuss.com (colores, redondeo, densidad, fuente, textos) y qué valores admite', params: {}, run: () => theme.get() },
+  'elffuss.theme_set':   { desc: 'Guardar el tema de «tu versión» del chat de elffuss.com: JSON con colors {wall, surface, board, steel, ink, graphite, on-ink, tape, accent, selection: #rrggbb}, radius, density, font, texts. Lo valida; si falla dice por qué', params: { theme: 'el JSON del tema completo' }, run: a => theme.set(a) },
+  'elffuss.theme_reset': { desc: 'Quitar el tema: elffuss.com vuelve al aspecto oficial', params: {}, run: () => theme.reset() },
   'github.connect': { desc: 'Conectar la cuenta de GitHub del usuario (abre la ventana de inicio de sesión de GitHub)', params: {}, run: () => github.connect() },
   'github.fork':    { desc: 'Preparar el fork del chat de Elffuss en el GitHub del usuario (lo crea o lo pone al día)', params: {}, run: () => github.fork() },
   'github.read':    { desc: 'Leer un fichero (o listar una carpeta) del fork del chat', params: { path: 'ruta, p. ej. chat/chat.css' }, run: a => github.read(a) },
@@ -70,6 +74,7 @@ alRegistrarHerramientas(defs => {
 export const PARAM_EXACTO = {
   'code.write': ['content'],
   'github.write': ['content'],
+  'elffuss.theme_set': ['theme'],
   'skill.create': ['instructions'],
   'code.edit': ['search', 'replace'],
 };
