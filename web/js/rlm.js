@@ -13,6 +13,7 @@
 //
 // El motor es agnóstico del proveedor: solo necesita algo con
 // `chat(history, system, onToken)` (lo cumplen rules/onnx/litert/api).
+import { setFrameHtml } from './sandbox-frame.js';
 
 const CHARS_PER_TOK = 4; // misma estimación que context.js
 const DEFAULTS = {
@@ -456,9 +457,11 @@ export async function rateArtifact(html, { ms = 2600 } = {}) {
   // común —el de arranque o parseo— y esos juegos salían «sin errores».
   // Detrás de <head> y no antes del doctype: delante, el documento cae en modo
   // quirks y cambia el tamaño del canvas, o sea que cambiaría lo que medimos.
-  marco.srcdoc = /<head[^>]*>/i.test(doc) ? doc.replace(/<head[^>]*>/i, m => m + sonda)
+  // En /sandbox/run.html y no como srcdoc: un srcdoc hereda la CSP de la página
+  // (sin scripts en línea) y el juego no correría (js/sandbox-frame.js).
+  setFrameHtml(marco, /<head[^>]*>/i.test(doc) ? doc.replace(/<head[^>]*>/i, m => m + sonda)
     : /<html[^>]*>/i.test(doc) ? doc.replace(/<html[^>]*>/i, m => m + sonda)
-    : sonda + doc;
+    : sonda + doc);
 
   const respuestas = [];
   const oir = e => { if (e.data && e.data.__sonda === 1) respuestas.push(e.data.r); };

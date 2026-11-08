@@ -12,6 +12,7 @@
 // el de juegos ejecuta el juego generado y lo puntúa mirándolo correr.
 import { DEFAULTS, packHistoryACER, estimateTokens } from './acer-core.js';
 import { TASKS } from './swe-tasks.js';
+import { setFrameHtml } from './sandbox-frame.js';
 
 const $ = s => document.querySelector(s);
 const el = (t, c, x) => { const n = document.createElement(t); if (c) n.className = c; if (x != null) n.textContent = x; return n; };
@@ -404,55 +405,27 @@ async function generarJuego() {
   return { html: out.html, inferencias, trace: out.trace };
 }
 
-// Puntúa el juego EJECUTÁNDOLO en la arena: ¿carga sin errores? ¿arranca?
-// ¿se mueve? ¿aguanta jugando? Cada criterio suma.
+// Puntúa el juego EJECUTÁNDOLO. Se ve en la arena, en /sandbox/run.html con origen
+// opaco (js/sandbox-frame.js): antes era un srcdoc con allow-same-origin, o sea, el
+// código que escribió el modelo corría con acceso a este origen, y bajo la CSP de
+// Code (sin scripts en línea) ya ni correría. La medida la hace rlm.rateArtifact,
+// que mete una sonda en el juego y lee NÚMEROS por postMessage (lo mismo que mide
+// deepCreate). Cambia un criterio: «llega a puntuar» leía window.score desde fuera,
+// que con origen opaco no se puede; ahora es «responde a la entrada».
 async function puntuarJuego(html) {
-  const frame = $('#arena');
   $('#arena-panel').hidden = false;
-  const errores = [];
-  const onErr = e => errores.push(String(e.message || e).slice(0, 120));
-  frame.srcdoc = html;
-  await new Promise(r => frame.onload = r);
-  const w = frame.contentWindow, d = frame.contentDocument;
-  w.addEventListener('error', onErr);
-  const hash = () => {
-    const c = d.querySelector('canvas'); if (!c) return -1;
-    try { const px = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
-      let h = 7; for (let i = 0; i < px.length; i += 997) h = (h * 31 + px[i]) % 999983; return h;
-    } catch { return -1; }
-  };
-  const esperar = ms => new Promise(r => setTimeout(r, ms));
-  const canvas = !!d.querySelector('canvas');
-  await esperar(600);
-  const h0 = hash();
-  // arrancar: pulsar el botón si lo hay, y quitarle el foco (si no, ESPACIO
-  // re-pulsa el botón en vez de saltar — nos pasó midiéndolo a mano)
-  const btn = d.querySelector('button');
-  if (btn) { btn.click(); btn.blur?.(); }
-  await esperar(400);
-  const arranca = hash() !== h0;
-  // jugar: aletear con click en el canvas, que es el manejador que sí registran
-  const c = d.querySelector('canvas');
-  let vivoMs = 0, puntos = 0;
-  const t0 = performance.now();
-  for (let i = 0; i < 20; i++) {
-    if (S.abort) break;   // ■ durante la partida: no seguir jugando
-    c?.dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
-    d.dispatchEvent(new w.KeyboardEvent('keydown', { key: ' ', code: 'Space', bubbles: true }));
-    await esperar(300);
-    const run = (() => { try { return w.gameRunning; } catch { return null; } })();
-    puntos = Math.max(puntos, (() => { try { return w.score || 0; } catch { return 0; } })());
-    if (run === false) break;
-    vivoMs = performance.now() - t0;
-  }
+  setFrameHtml($('#arena'), html);
+  const rlm = await import('./rlm.js');
+  const r = await rlm.rateArtifact(html);
+  const d = r.detalle || {};
   const criterios = {
-    'carga sin errores': errores.length === 0,
-    'tiene canvas': canvas,
-    'arranca': arranca,
-    'aguanta ≥3 s jugando': vivoMs >= 3000,
-    'llega a puntuar': puntos > 0,
+    'carga sin errores': !!d.sinErrores,
+    'tiene canvas (pinta)': !!d.pinta,
+    'arranca': !!(d.arranca && d.vivo),
+    'aguanta ≥3 s jugando': !!d.sobrevive,
+    'responde a la entrada': !!d.responde,
   };
-  return { criterios, errores, vivoSegs: +(vivoMs / 1000).toFixed(1), puntos, bytes: html.length };
+  return { criterios, errores: r.error ? [String(r.error)] : [], medible: r.medible !== false, nota: r.nota, bytes: html.length };
 }
 
 // El ■ no hacía nada aquí: este banco no tiene casos entre los que mirar
@@ -479,7 +452,7 @@ async function benchJuegos(onCase) {
     filas,
     resumen: {
       'criterios superados': `${pasa}/${filas.length}`, inferencias: g.inferencias,
-      'bytes': p.bytes, 'segundos vivo': p.vivoSegs, 'puntuación': p.puntos,
+      'bytes': p.bytes, 'nota de la sonda': p.medible ? p.nota : 'no medible',
     },
   };
 }
