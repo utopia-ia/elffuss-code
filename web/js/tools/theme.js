@@ -2,7 +2,7 @@
 // enlace a elffuss.com con el tema en el hash (#theme=…). El chat lo vuelve a validar, enseña cómo queda y solo lo
 // aplica si el usuario lo confirma allí. En Claw el tema se guarda en su almacén y el chat lo lee por el puente; Code
 // vive en otro origen y su almacén no lo ve elffuss.com, por eso aquí es un enlace.
-import { validateTheme, SCHEMA, COLORS, RADIUS, DENSITY, FONTS } from '../elffuss-theme.js';
+import { validateTheme, SCHEMA, COLORS, RADIUS, DENSITY, FONTS, BASE } from '../elffuss-theme.js';
 
 const CHAT = 'https://elffuss.com/';
 
@@ -14,7 +14,7 @@ function base64url(texto) {
 }
 
 export async function get() {
-  return `The theme is built here and applied on elffuss.com after the user confirms it. Allowed: colors {${Object.keys(COLORS).join(', ')}} as #rrggbb, radius ${Object.keys(RADIUS).join('|')}, density ${Object.keys(DENSITY).join('|')}, font ${Object.keys(FONTS).join('|')}, texts {es|en: {key: text}}.`;
+  return `The theme is built here and applied on elffuss.com after the user confirms it. The official look is a dark slate: ${JSON.stringify(BASE)}; colours you leave out keep these values, and text must stay readable on them. Allowed: colors {${Object.keys(COLORS).join(', ')}} as #rrggbb, radius ${Object.keys(RADIUS).join('|')}, density ${Object.keys(DENSITY).join('|')}, font ${Object.keys(FONTS).join('|')}. Labels (texts) cannot travel in a link: they are changed from Elffuss Claw.`;
 }
 
 export async function set({ theme }) {
