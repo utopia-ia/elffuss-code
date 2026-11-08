@@ -20,8 +20,12 @@ export async function get() {
 export async function set({ theme }) {
   const v = validateTheme(theme);
   if (!v.ok) throw new Error('Theme not valid: ' + v.errors.join('; '));
-  const link = `${CHAT}#theme=${base64url(JSON.stringify(v.theme))}`;
-  return `Theme valid (${SCHEMA}). Give the user this link: opening it on elffuss.com shows a preview and asks before applying it.\n${link}`;
+  // Un enlace puede venir de cualquiera, así que el chat ignora los textos de un tema que llega así (un texto podría
+  // pedir algo engañoso). Ni se mandan: los textos solo se cambian desde Claw.
+  const { texts, ...sinTextos } = v.theme;
+  const link = `${CHAT}#theme=${base64url(JSON.stringify(sinTextos))}`;
+  const aviso = texts ? '\nThe labels (texts) are NOT in the link: a link can only change colours, radius, font and density. To change labels, do it in Elffuss Claw (claw.elffuss.com).' : '';
+  return `Theme valid (${SCHEMA}). Give the user this link: opening it on elffuss.com shows a preview and asks before applying it.\n${link}${aviso}`;
 }
 
 export async function reset() {
