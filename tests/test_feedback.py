@@ -53,8 +53,8 @@ def body_of(payload):
 
 
 def stored_line(payload):
-    """La línea que tiene que quedar en el fichero: el payload y nada más."""
-    return (json.dumps(payload, ensure_ascii=False, separators=(',', ':')) + '\n').encode('utf-8')
+    """La línea que tiene que quedar en el fichero: el payload y nada más, en ASCII."""
+    return (json.dumps(payload, ensure_ascii=True, separators=(',', ':')) + '\n').encode('ascii')
 
 
 def sized(n):
@@ -490,6 +490,41 @@ class Storage(FeedbackCase):
         with mock.patch.object(serve, '_feedback_today', lambda: self.TODAY):
             self.assertAnswer(self.post(EXAMPLE), 200)
         self.assertEqual(sorted(os.listdir(self.dir)), sorted(kept + ['feedback.jsonl']))
+
+    def test_the_stored_line_is_pure_ascii_and_reads_back_the_same(self):
+        # Controles C1 (CSI, OSC … ST: una terminal los ejecutaría con cat o
+        # tail), los que dan la vuelta al texto, U+2028 y U+2029, y letras.
+        tricky = ('C1 \u0085 \u009b31m \u009d0;título\u009c, bidi ‮abc‬ ⁦x⁩, '
+                  'líneas    , emoji \U0001F600, ñ é ¿?')
+        payload = json.loads(json.dumps(EXAMPLE))
+        payload['messages'][0]['text'] = tricky
+        self.assertAnswer(self.post(payload), 200)
+        raw = self.path.read_bytes()
+        self.assertTrue(raw.isascii(), 'ni un byte por encima de 0x7f')
+        self.assertEqual(raw.count(b'\n'), 1)
+        for ch in '\u0085\u009b\u009d\u009c‮‬⁦⁩  ':
+            self.assertIn(b'\\u%04x' % ord(ch), raw)
+        self.assertEqual(raw, stored_line(payload))
+        self.assertEqual(json.loads(raw), payload, 'json.loads devuelve lo que se mandó')
+        self.assertEqual(raw.decode('ascii').splitlines(), [raw.decode('ascii').rstrip('\n')])
+
+    @unittest.skipIf('ELFFUSS_FEEDBACK_DAYS' in os.environ, 'el tope del día depende de ELFFUSS_FEEDBACK_DAYS')
+    def test_the_daily_cap_measures_the_escaped_line_and_holds_two_of_the_worst(self):
+        # La peor línea: un cuerpo del tope lleno de «é» (2 bytes, 6 al escaparla).
+        payload = sized(serve.FEEDBACK_MAX_BYTES)
+        for m in payload['messages']:
+            m['text'] = 'é' * (len(m['text']) // 2)
+        body = body_of(payload)
+        self.assertLessEqual(len(body), serve.FEEDBACK_MAX_BYTES)
+        line = len(stored_line(payload))
+        self.assertGreater(line, 2.9 * len(body))
+        self.assertLessEqual(line, 3 * len(body))
+        self.assertAnswer(self.send(body), 200)
+        self.assertAnswer(self.send(body), 200)
+        self.assertLessEqual(2 * line, serve.FEEDBACK_DAY_MAX_BYTES)
+        self.assertGreater(3 * line, serve.FEEDBACK_DAY_MAX_BYTES)
+        self.assertAnswer(self.send(body), 503, 'full')
+        self.assertEqual(self.path.stat().st_size, 2 * line)
 
     def test_the_daily_cap_answers_full_and_writes_nothing(self):
         self.assertAnswer(self.post(EXAMPLE), 200)

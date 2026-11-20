@@ -537,9 +537,10 @@ PROXY_RATE = _RateLimiter(PROXY_RATE_WINDOW_S, PROXY_RATE_MAX)
 #    (_feedback_unlogged): con su hora, y las líneas del fichero en orden de
 #    llegada, se sabría qué línea mandó quién;
 #  · Content-Length obligatorio, tope de 256 KiB y un plazo total para leer;
-#  · un .jsonl por día UTC, 0600 en una carpeta 0700, con tope por día y en
-#    total, y 90 días de vida (los poda un hilo aunque nadie mande nada). Manda
-#    el tope del día: llenarlo cuesta como mucho lo que queda de ese día;
+#  · un .jsonl por día UTC, en ASCII puro (_feedback_line), 0600 en una carpeta
+#    0700, con tope por día y en total, y 90 días de vida (los poda un hilo
+#    aunque nadie mande nada). Manda el tope del día: llenarlo cuesta como
+#    mucho lo que queda de ese día;
 #  · la respuesta es {"ok":true} o {"ok":false,"error":"<código>"}: nunca
 #    repite nada de lo recibido ni el texto de una excepción.
 class _FeedbackLimiter(_RateLimiter):
@@ -766,7 +767,9 @@ def _feedback_schema_error(p):
         role, text = m['role'], m['text']
         if type(role) is not str or role not in ('user', 'assistant', 'tool', 'gap'):
             return 'role'
-        # Sin surrogados sueltos: json.dumps(…).encode() fallaría al guardar.
+        # Ni C0 (salvo \t \n \r), ni DEL, ni surrogados sueltos: lo mismo que
+        # badChar de feedback-payload.js. Lo demás pasa, y _feedback_line lo
+        # guarda escapado.
         if type(text) is not str or len(text) > FEEDBACK_MAX_TEXT or _FB_BAD_CHAR_RE.search(text):
             return 'text'
         if role == 'tool' and not _FB_TOOL_RE.fullmatch(text):
@@ -878,12 +881,23 @@ def _feedback_total(path):
     return total
 
 
+def _feedback_line(payload):
+    """La línea que se guarda: el payload y nada más, en JSON compacto y en
+    ASCII puro. Cualquier carácter que no es ASCII queda como \\uXXXX: los de
+    control C1 (U+0080 a U+009F, que algunas terminales ejecutan: el título de
+    la ventana, el portapapeles con OSC 52) y los que dan la vuelta al texto
+    (U+202A a U+202E, U+2066 a U+2069) no llegan crudos a quien haga cat o tail
+    del fichero, y json.loads devuelve el payload tal cual. Una «é» ocupa 6
+    bytes en vez de 2 (un emoji, 12 en vez de 4): la línea mide como mucho el
+    triple que el cuerpo, y los topes miden la línea."""
+    return (json.dumps(payload, ensure_ascii=True, separators=(',', ':')) + '\n').encode('ascii')
+
+
 def _feedback_store(line):
     """Anexa una línea (bytes) al fichero del día → True, o False si con ella
     se pasaría del tope del día o del total (503 full). Cualquier otro fallo es
-    una excepción. json.dumps escapa \\n y \\r, así que un envío es una línea;
-    para leerlo, línea a línea (for line in f): str.splitlines() corta también
-    en U+2028, que puede ir tal cual dentro de un texto."""
+    una excepción. La línea es ASCII puro (ver _feedback_line): un envío es una
+    línea, y se lee igual con for line in f que con str.splitlines()."""
     path = Path(FEEDBACK_PATH)
     if _feedback_inside_root(path):
         raise _FeedbackInsideRoot()
@@ -1036,9 +1050,8 @@ def _feedback_handle(h):
         return _feedback_answer(h, 204) if _feedback_ready() else _feedback_answer(h, 500, 'storage')
     if not FEEDBACK_GLOBAL_RATE.allow('*'):                          # 6 bis. ahora sí, el cupo de todos
         return _feedback_answer(h, 503, 'overloaded', FEEDBACK_RETRY_AFTER_S)
-    line = (json.dumps(payload, ensure_ascii=False, separators=(',', ':')) + '\n').encode('utf-8')
     try:                                                             # 12. guardar
-        stored = _feedback_store(line)
+        stored = _feedback_store(_feedback_line(payload))
     except Exception as e:  # noqa: BLE001 — solo el nombre de la excepción: su texto lleva rutas
         h.log_message('feedback: storage failed (%s)', type(e).__name__)
         return _feedback_answer(h, 500, 'storage')
