@@ -1,17 +1,20 @@
 #!/usr/bin/env python3
-"""Servidor de desarrollo de Elffuss Code: sirve web/ y hace de proxy en /proxy?url=…
+"""Servidor de desarrollo de Elffuss Code: sirve web/, hace de proxy en /proxy?url=…
+y recoge /proxy/feedback.
 
 En producción, /proxy de code.elffuss.com lo atiende el backend compartido
 (server/serve.py de elffuss-claw); este fichero es el de desarrollo, con el
-mismo proxy.
+mismo proxy y el mismo /proxy/feedback.
 
 Uso:  python3 server/serve.py [puerto]   (por defecto 8642)
       Escucha solo en 127.0.0.1; ELFFUSS_BIND=0.0.0.0 lo abre a la red.
 """
+import datetime
 import functools
 import http.client
 import http.server
 import ipaddress
+import json
 import re
 import socket
 import socketserver
@@ -515,6 +518,453 @@ class _RateLimiter:
 PROXY_RATE = _RateLimiter(PROXY_RATE_WINDOW_S, PROXY_RATE_MAX)
 
 
+# ---- /proxy/feedback: the same block in elffuss-claw and elffuss-code ----
+# Valoraciones (buena o mala respuesta) y avisos de una conversación del chat de
+# elffuss.com (site-chat/chat/feedback.js). El navegador anonimiza la
+# conversación ANTES de mandarla, enseña exactamente lo que va a salir y deja
+# unos segundos para cancelar. Aquí se comprueba que lo que llega tiene la forma
+# exacta del esquema v1 y que no trae nada con pinta de dato personal, y se
+# guarda TAL CUAL: sin IP, sin User-Agent, sin hora y sin nada más que diga
+# quién lo mandó (el día va en el nombre del fichero). /proxy/report sí guarda
+# la IP: de él no se aprovecha ni el registro ni el límite.
+#  · quién llama, lo primero (_proxy_caller_ok): así otra web no gasta desde el
+#    navegador de alguien el cupo de esa persona;
+#  · límites solo en memoria, por cliente (_rate_key: una IPv6 cuenta por su
+#    /64) y entre todos; no se escriben ni salen en el log;
+#  · Content-Length obligatorio, tope de 256 KiB y un plazo total para leer;
+#  · un .jsonl por día UTC, 0600 en una carpeta 0700, con tope por día y en
+#    total, y 90 días de vida (los poda un hilo aunque nadie mande nada);
+#  · la respuesta es {"ok":true} o {"ok":false,"error":"<código>"}: nunca
+#    repite nada de lo recibido ni el texto de una excepción.
+FEEDBACK_PATH = os.environ.get('ELFFUSS_FEEDBACK') or str(
+    Path(os.environ.get('ELFFUSS_REPORTS') or (Path.home() / 'elffuss' / 'reports.jsonl')).parent / 'feedback.jsonl')
+FEEDBACK_MAX_BYTES = 262_144          # = CAPS.bodyBytes de feedback-payload.js = client_max_body_size de nginx
+FEEDBACK_MAX_MESSAGES = 400
+FEEDBACK_MAX_TEXT = 65_536            # puntos de código por texto
+FEEDBACK_READ_TIMEOUT_S = 10          # para el cuerpo ENTERO, no por lectura
+FEEDBACK_RATE = _RateLimiter(600, 10)                                   # por cliente: 10 cada 10 minutos
+FEEDBACK_GLOBAL_RATE = _RateLimiter(3600, int(os.environ.get('ELFFUSS_FEEDBACK_GLOBAL_MAX') or 200))   # entre todos, por hora
+FEEDBACK_RETRY_AFTER_S = 600
+FEEDBACK_DAY_MAX_BYTES = 8 * 1024 * 1024
+FEEDBACK_TOTAL_MAX_BYTES = 200 * 1024 * 1024
+FEEDBACK_KEEP_DAYS = int(os.environ.get('ELFFUSS_FEEDBACK_DAYS') or 90)
+FEEDBACK_TIDY_EVERY_S = 6 * 3600
+# La red de seguridad de después del anonimizador, la misma que LEFTOVER de
+# anonymize.js: correos, enlaces que no son elffuss.com sin ruta, www.algo y
+# carpetas personales (ci); 5 cifras seguidas o más, claves con prefijo
+# conocido, JWT y claves privadas (cs). Las etiquetas [TIPO_n] se tapan antes
+# con espacios del mismo largo. re.A en las dos: sin él, [a-z] con re.I casaría
+# también la s larga y el signo Kelvin, y en JS (sin la bandera u) no casan.
+# Se cambian a la vez aquí, en la otra copia de este bloque y en anonymize.js.
+FEEDBACK_LEFTOVER_CI = re.compile(r'''[^ \t\r\n@]@[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}|(?:https?|ftp)://(?!(?:[a-z0-9-]+\.)*elffuss\.com/?[.,;:!?)\]'"»”]*(?:[ \t\r\n<>]|$))|(?<![a-z0-9.-])www\.[a-z0-9-]+\.[a-z]{2,}|/(?:users|home)/[a-z0-9._-]|[a-z]:\\(?:users|documents and settings)\\''', re.I | re.A)
+FEEDBACK_LEFTOVER_CS = re.compile(r'''[0-9]{5,}|(?<![A-Za-z0-9_-])(?:sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|glpat-[A-Za-z0-9_-]{20,}|xox[abprs]-[A-Za-z0-9-]{10,}|(?:AKIA|ASIA)[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35}|hf_[A-Za-z0-9]{30,}|npm_[A-Za-z0-9]{30,})|(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}|-----BEGIN [A-Z ]*PRIVATE KEY-----''', re.A)
+FEEDBACK_PLACEHOLDER = re.compile(r'\[[A-Z]+_[0-9]+\]')
+
+_FB_KEYS = frozenset(('v', 'action', 'rated', 'app', 'build', 'model', 'lang', 'anonymizer', 'cut', 'messages'))
+_FB_MESSAGE_KEYS = frozenset(('role', 'text', 'end'))
+_FB_ENDS = ('stopped', 'cut', 'cutTool', 'stalled', 'noAnswer')
+_FB_BUILD_RE = re.compile(r'[0-9A-Za-z._-]{1,40}')
+_FB_MODEL_RE = re.compile(r'[a-z0-9][a-z0-9.-]{0,47}')
+_FB_ANONYMIZER_RE = re.compile(r'[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}')
+_FB_TOOL_RE = re.compile(r'\[tool(?:: [a-z]{1,20}\.[a-z]{1,20})?\]')
+_FB_GAP_RE = re.compile(r'\[[1-9][0-9]{0,2} messages? left out\]')
+_FB_BAD_CHAR_RE = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\ud800-\udfff]')   # C0 (salvo \t \n \r), DEL, surrogados sueltos
+_FB_DIGITS_RE = re.compile(r'[0-9]+')
+_FEEDBACK_LOCK = threading.Lock()   # una escritura (con su rotación y su poda) cada vez
+
+
+class _FeedbackBadJSON(ValueError):
+    """JSON que json.loads aceptaría y aquí no: claves repetidas, NaN, Infinity."""
+
+
+class _FeedbackInsideRoot(Exception):
+    """FEEDBACK_PATH cae dentro de ROOT, que el servidor estático sirve."""
+
+
+def _fb_object(pairs):
+    out = {}
+    for key, value in pairs:
+        if key in out:
+            raise _FeedbackBadJSON('clave repetida')
+        out[key] = value
+    return out
+
+
+def _fb_constant(name):
+    raise _FeedbackBadJSON('NaN o Infinity')
+
+
+def _fb_parse_int(text):
+    # Convertir un entero de cientos de miles de cifras cuesta (y en Python
+    # 3.11+ es un error); ninguno válido pasa de 6 cifras, así que uno largo
+    # llega como float y lo rechaza el esquema.
+    return int(text) if len(text) <= 20 else float(text)
+
+
+def _fb_int(value, low, high):
+    """Un entero de verdad dentro de [low, high]: ni True ni 1.0."""
+    return type(value) is int and low <= value <= high
+
+
+def _feedback_length(headers):
+    """Content-Length → (bytes, None), o (None, (estado, código)) si falta, no
+    es un número, vale 0 o pasa del tope. Por trozos (Transfer-Encoding) no."""
+    values = headers.get_all('Content-Length') or []
+    if headers.get('Transfer-Encoding') is not None or not values:
+        return None, (411, 'length-required')
+    text = values[0].strip(' \t')
+    if len(values) != 1 or not _FB_DIGITS_RE.fullmatch(text):
+        return None, (400, 'bad-length')
+    digits = text.lstrip('0')
+    if len(digits) > 7 or int(digits or '0') > FEEDBACK_MAX_BYTES:
+        return None, (413, 'too-large')
+    if not digits:
+        return None, (400, 'bad-length')
+    return int(digits), None
+
+
+def _feedback_is_json(headers):
+    """Content-Type application/json, con parámetros o sin ellos."""
+    values = headers.get_all('Content-Type') or []
+    return len(values) == 1 and values[0].split(';', 1)[0].strip().lower() == 'application/json'
+
+
+def _feedback_read(h, length, keep=True):
+    """Lee exactamente length bytes del cuerpo con un plazo TOTAL de
+    FEEDBACK_READ_TIMEOUT_S: el timeout del socket cuenta por lectura, y quien
+    manda un byte cada pocos segundos lo esquivaría. → bytes, o None si el
+    cuerpo llega corto o tarde. Con keep=False solo lo vacía."""
+    deadline = time.monotonic() + FEEDBACK_READ_TIMEOUT_S
+    read = getattr(h.rfile, 'read1', None) or h.rfile.read
+    chunks, left = [], length
+    try:
+        while left > 0:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return None
+            h.connection.settimeout(remaining)
+            chunk = read(min(left, 1 << 16))
+            if not chunk:
+                return None
+            if keep:
+                chunks.append(chunk)
+            left -= len(chunk)
+    except (OSError, ValueError):
+        return None
+    finally:
+        try:
+            h.connection.settimeout(FEEDBACK_READ_TIMEOUT_S)
+        except OSError:
+            pass
+    return b''.join(chunks)
+
+
+def _feedback_parse(body):
+    """bytes → dict, o None si no es un objeto JSON en UTF-8 estricto."""
+    try:
+        data = json.loads(body.decode('utf-8'), object_pairs_hook=_fb_object,
+                          parse_constant=_fb_constant, parse_int=_fb_parse_int)
+    except (ValueError, RecursionError):   # UnicodeDecodeError y JSONDecodeError son ValueError
+        return None
+    return data if type(data) is dict else None
+
+
+def _feedback_schema_error(p):
+    """None si p cumple el esquema v1 y las reglas que el esquema no dice; si
+    no, un motivo corto, que no sale ni en la respuesta ni en el log. Es lo
+    mismo que validatePayload de feedback-payload.js menos la red de seguridad,
+    que va aparte (_feedback_leftover: 422 y no 400)."""
+    if set(p) != _FB_KEYS:
+        return 'keys'
+    if not _fb_int(p['v'], 1, 1):
+        return 'v'
+    action = p['action']
+    if type(action) is not str or action not in ('like', 'dislike', 'report'):
+        return 'action'
+    if type(p['app']) is not str or p['app'] != 'chat':
+        return 'app'
+    if type(p['lang']) is not str or p['lang'] not in ('en', 'es'):
+        return 'lang'
+    if type(p['build']) is not str or not _FB_BUILD_RE.fullmatch(p['build']):
+        return 'build'
+    model = p['model']
+    if model is not None and (type(model) is not str or not _FB_MODEL_RE.fullmatch(model)):
+        return 'model'
+    if type(p['anonymizer']) is not str or not _FB_ANONYMIZER_RE.fullmatch(p['anonymizer']):
+        return 'anonymizer'
+    cut = p['cut']
+    if (type(cut) is not dict or set(cut) != {'dropped', 'shortened'}
+            or not _fb_int(cut['dropped'], 0, 100_000) or not _fb_int(cut['shortened'], 0, 400)):
+        return 'cut'
+    messages = p['messages']
+    if type(messages) is not list or not 1 <= len(messages) <= FEEDBACK_MAX_MESSAGES:
+        return 'messages'
+    for m in messages:
+        if type(m) is not dict or 'role' not in m or 'text' not in m or not set(m) <= _FB_MESSAGE_KEYS:
+            return 'message'
+        role, text = m['role'], m['text']
+        if type(role) is not str or role not in ('user', 'assistant', 'tool', 'gap'):
+            return 'role'
+        # Sin surrogados sueltos: json.dumps(…).encode() fallaría al guardar.
+        if type(text) is not str or len(text) > FEEDBACK_MAX_TEXT or _FB_BAD_CHAR_RE.search(text):
+            return 'text'
+        if role == 'tool' and not _FB_TOOL_RE.fullmatch(text):
+            return 'tool'
+        if role == 'gap' and not _FB_GAP_RE.fullmatch(text):
+            return 'gap'
+        if 'end' in m and (role != 'assistant' or type(m['end']) is not str or m['end'] not in _FB_ENDS):
+            return 'end'
+    rated = p['rated']
+    if action == 'report':
+        if rated is not None:
+            return 'rated'
+    elif not _fb_int(rated, 0, len(messages) - 1) or messages[rated]['role'] != 'assistant':
+        return 'rated'
+    return None
+
+
+def _feedback_leftover(text):
+    """¿Queda en text algo con pinta de dato personal? Las etiquetas [TIPO_n]
+    se tapan antes con espacios del mismo largo."""
+    masked = FEEDBACK_PLACEHOLDER.sub(lambda m: ' ' * len(m.group()), text)
+    return bool(FEEDBACK_LEFTOVER_CI.search(masked) or FEEDBACK_LEFTOVER_CS.search(masked))
+
+
+def _feedback_inside_root(path):
+    root = os.path.realpath(ROOT)
+    where = os.path.realpath(path)
+    return where == root or where.startswith(root.rstrip(os.sep) + os.sep)
+
+
+def _feedback_today():   # las pruebas lo sustituyen
+    return datetime.datetime.now(datetime.timezone.utc).date()
+
+
+def _feedback_rotated(path):
+    """Los ficheros ya rotados junto a path → [(día, ruta)]. Solo los que se
+    llaman exactamente <nombre>-AAAA-MM-DD[.N]<extensión>: nada más se toca."""
+    name = re.compile(re.escape(path.stem) + r'-([0-9]{4}-[0-9]{2}-[0-9]{2})(?:\.[0-9]+)?' + re.escape(path.suffix))
+    found = []
+    try:
+        with os.scandir(path.parent) as entries:
+            for entry in entries:
+                m = name.fullmatch(entry.name)
+                if m and entry.is_file(follow_symlinks=False):
+                    try:
+                        found.append((datetime.date.fromisoformat(m.group(1)), Path(entry.path)))
+                    except ValueError:
+                        pass
+    except (FileNotFoundError, NotADirectoryError):
+        pass
+    return found
+
+
+def _feedback_tidy_locked(path):
+    """Con _FEEDBACK_LOCK cogido: si el fichero activo es de un día UTC
+    anterior a hoy, pasa a <nombre>-<ese día><extensión> (con .1, .2… si el
+    nombre ya existe); luego borra los rotados de hace más de FEEDBACK_KEEP_DAYS."""
+    today = _feedback_today()
+    try:
+        mtime = os.stat(path).st_mtime
+    except (FileNotFoundError, NotADirectoryError):
+        mtime = None
+    if mtime is not None:
+        day = datetime.datetime.fromtimestamp(mtime, datetime.timezone.utc).date()
+        if day < today:
+            stamp, n = day.isoformat(), 0
+            target = path.with_name('%s-%s%s' % (path.stem, stamp, path.suffix))
+            while os.path.lexists(target):
+                n += 1
+                target = path.with_name('%s-%s.%d%s' % (path.stem, stamp, n, path.suffix))
+            os.rename(path, target)
+    for day, old in _feedback_rotated(path):
+        if (today - day).days > FEEDBACK_KEEP_DAYS:
+            try:
+                old.unlink()
+            except FileNotFoundError:
+                pass
+
+
+def _feedback_tidy():
+    """Rotar y podar sin escribir nada. Dentro de ROOT no se toca nada."""
+    path = Path(FEEDBACK_PATH)
+    if _feedback_inside_root(path):
+        return
+    with _FEEDBACK_LOCK:
+        _feedback_tidy_locked(path)
+
+
+def _feedback_janitor():
+    """Hilo de main() (solo de main(): las pruebas que importan este módulo no
+    tocan ninguna carpeta de verdad). Rota y poda al arrancar y luego cada 6
+    horas, para que los 90 días se cumplan aunque nadie mande nada."""
+    while True:
+        try:
+            _feedback_tidy()
+        except Exception as e:  # noqa: BLE001 — un fallo de disco no mata el hilo
+            sys.stderr.write('· feedback: tidy failed (%s)\n' % type(e).__name__)
+        time.sleep(FEEDBACK_TIDY_EVERY_S)
+
+
+def _feedback_total(path):
+    """Bytes de todos los <nombre>*<extensión> de la carpeta: el activo y los rotados."""
+    total = 0
+    with os.scandir(path.parent) as entries:
+        for entry in entries:
+            if (entry.name.startswith(path.stem) and entry.name.endswith(path.suffix)
+                    and entry.is_file(follow_symlinks=False)):
+                total += entry.stat(follow_symlinks=False).st_size
+    return total
+
+
+def _feedback_store(line):
+    """Anexa una línea (bytes) al fichero del día → True, o False si con ella
+    se pasaría del tope del día o del total (503 full). Cualquier otro fallo es
+    una excepción. json.dumps escapa \\n y \\r, así que un envío es una línea;
+    para leerlo, línea a línea (for line in f): str.splitlines() corta también
+    en U+2028, que puede ir tal cual dentro de un texto."""
+    path = Path(FEEDBACK_PATH)
+    if _feedback_inside_root(path):
+        raise _FeedbackInsideRoot()
+    with _FEEDBACK_LOCK:
+        path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        _feedback_tidy_locked(path)
+        try:
+            size = os.stat(path).st_size
+        except FileNotFoundError:
+            size = 0
+        if (size + len(line) > FEEDBACK_DAY_MAX_BYTES
+                or _feedback_total(path) + len(line) > FEEDBACK_TOTAL_MAX_BYTES):
+            return False
+        flags = os.O_WRONLY | os.O_APPEND | os.O_CREAT | getattr(os, 'O_NOFOLLOW', 0) | getattr(os, 'O_CLOEXEC', 0)
+        fd = os.open(path, flags, 0o600)
+        try:
+            start = os.fstat(fd).st_size
+            try:
+                view = memoryview(line)
+                while view:
+                    done = os.write(fd, view)
+                    if done <= 0:
+                        raise OSError('os.write devolvió %d' % done)
+                    view = view[done:]
+            except BaseException:
+                try:
+                    os.ftruncate(fd, start)   # ni media línea en el fichero
+                except OSError:
+                    pass
+                raise
+        finally:
+            os.close(fd)
+    return True
+
+
+def _feedback_ready():
+    """Para la sonda, sin escribir nada: la carpeta existe o se puede crear, se
+    puede escribir en ella y no cae dentro de ROOT."""
+    path = Path(FEEDBACK_PATH)
+    if _feedback_inside_root(path):
+        return False
+    folder = path.parent
+    while not os.path.lexists(folder):
+        if folder.parent == folder:
+            return False
+        folder = folder.parent
+    if not folder.is_dir() or not os.access(folder, os.W_OK | os.X_OK):
+        return False
+    return not os.path.lexists(path) or (not path.is_symlink() and path.is_file() and os.access(path, os.W_OK))
+
+
+def _feedback_is_probe(h):
+    """La sonda de install-proxy.sh: X-Feedback-Probe: 1, desde loopback y SIN
+    X-Forwarded-For. nginx pone siempre X-Forwarded-For en esta ruta, así que
+    desde fuera nadie llega aquí."""
+    return ((h.headers.get('X-Feedback-Probe') or '').strip() == '1'
+            and _is_loopback(h.client_address[0])
+            and h.headers.get('X-Forwarded-For') is None)
+
+
+def _feedback_answer(h, status, error=None, retry_after=None):
+    """Toda respuesta de /proxy/feedback: JSON fijo, nada de la entrada."""
+    if status == 204:
+        body = b''
+    elif error:
+        body = ('{"ok":false,"error":"%s"}' % error).encode('ascii')
+    else:
+        body = b'{"ok":true}'
+    h.send_response(status)
+    if status != 204:   # un 204 no lleva cuerpo ni Content-Length (RFC 9110, 8.6)
+        h.send_header('Content-Type', 'application/json')
+        h.send_header('Content-Length', str(len(body)))
+    else:
+        h.send_header('X-Feedback-Probe', 'ok')
+    if error:
+        h.send_header('X-Feedback-Error', error)
+    if retry_after:
+        h.send_header('Retry-After', str(retry_after))
+    h.send_header('Connection', 'close')
+    h._proxy_safety_headers()
+    h.end_headers()
+    if body:
+        h.wfile.write(body)
+
+
+def _feedback_handle(h):
+    """POST /proxy/feedback: las comprobaciones, en este orden."""
+    h.close_connection = True
+    try:
+        h.connection.settimeout(FEEDBACK_READ_TIMEOUT_S)
+    except OSError:
+        pass
+    length, length_error = _feedback_length(h.headers)
+
+    def refuse(status, error, retry_after=None):
+        # Un rechazo antes de leer: si la longitud es buena se vacía antes el
+        # cuerpo (sin guardarlo), porque cerrar con datos sin leer manda un RST
+        # y nginx podría perder la respuesta y contestar 502.
+        if length is not None:
+            _feedback_read(h, length, keep=False)
+        return _feedback_answer(h, status, error, retry_after)
+
+    if not h._proxy_caller_ok():                                     # 1. quién llama
+        return refuse(403, 'cross-site')
+    if not _feedback_is_json(h.headers):                             # 2. JSON
+        return refuse(415, 'content-type')
+    if length_error:                                                 # 3 y 4. longitud (413 sin leer)
+        return _feedback_answer(h, *length_error)
+    if not FEEDBACK_RATE.allow(_rate_key(h.client_ip())):            # 5. por cliente, en memoria
+        return refuse(429, 'rate-limited', FEEDBACK_RETRY_AFTER_S)
+    if not FEEDBACK_GLOBAL_RATE.allow('*'):                          # 6. entre todos
+        return refuse(503, 'overloaded', FEEDBACK_RETRY_AFTER_S)
+    body = _feedback_read(h, length)                                 # 7. el cuerpo, con plazo
+    if body is None:
+        return _feedback_answer(h, 400, 'bad-length')
+    payload = _feedback_parse(body)                                  # 8. JSON estricto
+    if payload is None:
+        return _feedback_answer(h, 400, 'bad-json')
+    try:                                                             # 9 y 10. esquema y red de seguridad
+        bad = _feedback_schema_error(payload)
+        leftover = bad is None and any(_feedback_leftover(m['text']) for m in payload['messages']
+                                       if m['role'] in ('user', 'assistant'))
+    except Exception:  # noqa: BLE001 — un fallo aquí es un rechazo, nunca un 500 que cuente nada
+        bad, leftover = 'error', False
+    if bad:
+        return _feedback_answer(h, 400, 'schema')
+    if leftover:
+        return _feedback_answer(h, 422, 'leftover')
+    if _feedback_is_probe(h):                                        # 11. la sonda no escribe
+        return _feedback_answer(h, 204) if _feedback_ready() else _feedback_answer(h, 500, 'storage')
+    line = (json.dumps(payload, ensure_ascii=False, separators=(',', ':')) + '\n').encode('utf-8')
+    try:                                                             # 12. guardar
+        stored = _feedback_store(line)
+    except Exception as e:  # noqa: BLE001 — solo el nombre de la excepción: su texto lleva rutas
+        h.log_message('feedback: storage failed (%s)', type(e).__name__)
+        return _feedback_answer(h, 500, 'storage')
+    if not stored:
+        return _feedback_answer(h, 503, 'full')
+    return _feedback_answer(h, 200)                                  # 13.
+# ---- end /proxy/feedback ----
+
+
 def _log_target(path):
     """Para el log, solo esquema y host del destino: la ruta y la query pueden
     llevar tokens, y lo que el usuario lee no tiene por qué quedar escrito."""
@@ -546,6 +996,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def do_POST(self):
         if self.path.startswith('/v1/'):
             return self.forward_lm()
+        if self.path == '/proxy/feedback':
+            return self.feedback()
         self.send_error(404)
 
     def client_ip(self):
@@ -648,6 +1100,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def feedback(self):
+        return _feedback_handle(self)
+
     def log_request(self, code='-', size='-'):
         if isinstance(code, HTTPStatus):
             code = code.value
@@ -670,6 +1125,7 @@ def main(argv=None):
     socketserver.ThreadingTCPServer.allow_reuse_address = True
     with socketserver.ThreadingTCPServer((bind, port), Handler) as httpd:
         print(f'✳ Elffuss Code · http://localhost:{port}')
+        threading.Thread(target=_feedback_janitor, name='feedback-janitor', daemon=True).start()
         httpd.serve_forever()
 
 

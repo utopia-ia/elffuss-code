@@ -635,8 +635,11 @@ class Units(unittest.TestCase):
             def serve_forever(self):
                 pass
         env = {k: v for k, v in os.environ.items() if k != 'ELFFUSS_BIND'}
+        # main() arranca además el hilo que rota y poda /proxy/feedback: aquí no,
+        # que tocaría la carpeta de verdad (create: también sin ese hilo).
         with mock.patch.object(serve.socketserver, 'ThreadingTCPServer', FakeServer), \
-                mock.patch.dict(os.environ, env, clear=True), mock.patch('builtins.print'):
+                mock.patch.dict(os.environ, env, clear=True), mock.patch('builtins.print'), \
+                mock.patch.object(serve, '_feedback_janitor', lambda: None, create=True):
             serve.main(['serve.py', '8642'])
             os.environ['ELFFUSS_BIND'] = '0.0.0.0'
             serve.main(['serve.py', '8650'])
