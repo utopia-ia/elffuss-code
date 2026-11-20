@@ -87,8 +87,8 @@ class FeedbackCase(unittest.TestCase):
         self.err = io.StringIO()                # todo lo que el servidor escribe en stderr
         for target, name, value in ((serve, 'FEEDBACK_PATH', str(self.path)),
                                     (serve, 'ROOT', str(self.root)),
-                                    (serve, 'FEEDBACK_RATE', serve._RateLimiter(600, 10_000)),
-                                    (serve, 'FEEDBACK_GLOBAL_RATE', serve._RateLimiter(3600, 10_000)),
+                                    (serve, 'FEEDBACK_RATE', serve._FeedbackLimiter(600, 10_000)),
+                                    (serve, 'FEEDBACK_GLOBAL_RATE', serve._FeedbackLimiter(3600, 10_000)),
                                     (serve.sys, 'stderr', self.err)):
             patcher = mock.patch.object(target, name, value)
             patcher.start()
@@ -232,7 +232,7 @@ class Accepts(FeedbackCase):
 
 class Refuses(FeedbackCase):
     def test_other_sites_are_refused_first_and_use_up_no_quota(self):
-        with mock.patch.object(serve, 'FEEDBACK_RATE', serve._RateLimiter(600, 2)):
+        with mock.patch.object(serve, 'FEEDBACK_RATE', serve._FeedbackLimiter(600, 2)):
             for headers in ({'Sec-Fetch-Site': 'cross-site'}, {'Sec-Fetch-Site': 'same-site'},
                             {'Sec-Fetch-Site': 'cross-site', 'Content-Type': 'text/plain'},
                             {'Origin': 'https://evil.example'}, {'Origin': 'null'},
@@ -349,7 +349,7 @@ class Refuses(FeedbackCase):
     def test_refusals_leave_nothing_in_the_log_either(self):
         leftover = json.loads(json.dumps(EXAMPLE))
         leftover['messages'][0]['text'] = 'escribe a ana@correo.es'
-        with mock.patch.object(serve, 'FEEDBACK_RATE', serve._RateLimiter(600, 1)):
+        with mock.patch.object(serve, 'FEEDBACK_RATE', serve._FeedbackLimiter(600, 1)):
             got = [self.post(EXAMPLE, headers={'Sec-Fetch-Site': 'cross-site'})[0],
                    self.post(EXAMPLE, headers={'Content-Type': 'text/plain'})[0],
                    self.send(length=None)[0], self.send(length='abc')[0],
@@ -372,7 +372,7 @@ class Refuses(FeedbackCase):
 
 class Limits(FeedbackCase):
     def test_each_client_has_a_quota_kept_only_in_memory(self):
-        with mock.patch.object(serve, 'FEEDBACK_RATE', serve._RateLimiter(600, 2)):
+        with mock.patch.object(serve, 'FEEDBACK_RATE', serve._FeedbackLimiter(600, 2)):
             first = [self.post(EXAMPLE, headers={'X-Forwarded-For': '192.0.2.10'})[0] for _ in range(2)]
             third = self.post(EXAMPLE, headers={'X-Forwarded-For': '192.0.2.10'})
             # Cuenta la última entrada (la que pone nginx), no las que escribe el cliente.
@@ -388,19 +388,53 @@ class Limits(FeedbackCase):
         for ip in ('192.0.2.10', '192.0.2.11', '192.0.2.99'):
             self.assertNotIn(ip, everything)
 
-    def test_ipv6_clients_share_their_64(self):
-        with mock.patch.object(serve, 'FEEDBACK_RATE', serve._RateLimiter(600, 2)):
+    def test_ipv6_clients_share_their_56(self):
+        # Una casa suele tener un /56 entero: sus 256 /64 son el mismo cliente.
+        with mock.patch.object(serve, 'FEEDBACK_RATE', serve._FeedbackLimiter(600, 2)):
             got = [self.post(EXAMPLE, headers={'X-Forwarded-For': ip})[0]
-                   for ip in ('2001:db8:1:2::1', '2001:db8:1:2:ffff::9', '2001:db8:1:2:abcd::5', '2001:db8:1:3::1')]
+                   for ip in ('2001:db8:1:200::1', '2001:db8:1:2ff:ffff::9', '2001:db8:1:2ab::5', '2001:db8:1:300::1')]
         self.assertEqual(got, [200, 200, 429, 200])
 
     def test_a_global_limit_across_every_client(self):
-        with mock.patch.object(serve, 'FEEDBACK_GLOBAL_RATE', serve._RateLimiter(3600, 2)):
+        with mock.patch.object(serve, 'FEEDBACK_GLOBAL_RATE', serve._FeedbackLimiter(3600, 2)):
             answers = [self.post(EXAMPLE, headers={'X-Forwarded-For': '192.0.2.%d' % (20 + i)}) for i in range(3)]
         self.assertEqual([a[0] for a in answers[:2]], [200, 200])
         self.assertAnswer(answers[2], 503, 'overloaded')
         self.assertEqual(answers[2][1].get('retry-after'), '600')
         self.assertEqual(len(self.lines()), 2)
+
+    def test_junk_does_not_spend_the_budget_of_everyone(self):
+        # Antes, cuatro IPv4 mandando solo cabeceras dejaban a todos en 503
+        # overloaded. El cupo de todos lo gasta solo un envío que se guardaría.
+        leftover = json.loads(json.dumps(EXAMPLE))
+        leftover['messages'][0]['text'] = 'escribe a ana@correo.es'
+        junk = [b'{', b'{"v": 1}', body_of(leftover), b'x' * 100, json.dumps([EXAMPLE]).encode('ascii')]
+        with mock.patch.object(serve, 'FEEDBACK_GLOBAL_RATE', serve._FeedbackLimiter(3600, 2)):
+            got = [self.send(body, headers={'X-Forwarded-For': '192.0.2.%d' % (30 + i)})[0]
+                   for i, body in enumerate(junk * 4)]
+            # Una sonda tampoco gasta: no guarda nada.
+            self.assertEqual(self.send(PROBE_BODY, headers={'X-Feedback-Probe': '1'}, omit=BROWSER)[0], 204)
+            answers = [self.post(EXAMPLE, headers={'X-Forwarded-For': '192.0.2.%d' % (60 + i)}) for i in range(3)]
+        self.assertEqual(got, [400, 400, 422, 400, 400] * 4)
+        self.assertEqual([a[0] for a in answers[:2]], [200, 200])
+        self.assertAnswer(answers[2], 503, 'overloaded')
+        self.assertEqual(len(self.lines()), 2)
+
+    def test_with_no_budget_left_a_post_is_refused_before_it_is_parsed(self):
+        with mock.patch.object(serve, 'FEEDBACK_GLOBAL_RATE', serve._FeedbackLimiter(3600, 1)):
+            self.assertAnswer(self.post(EXAMPLE), 200)
+            with mock.patch.object(serve, '_feedback_parse', side_effect=AssertionError('leído')):
+                self.assertAnswer(self.post(EXAMPLE), 503, 'overloaded')
+        self.assertEqual(len(self.lines()), 1)
+
+    def test_a_full_table_of_clients_is_overloaded_and_known_clients_go_on(self):
+        with mock.patch.object(serve, 'FEEDBACK_RATE', serve._FeedbackLimiter(600, 10, max_keys=2)):
+            got = [self.post(EXAMPLE, headers={'X-Forwarded-For': ip}) for ip in
+                   ('192.0.2.1', '2001:db8:1:200::1', '192.0.2.3', '2001:db8:1:2ff::1', '192.0.2.1')]
+        self.assertEqual([g[0] for g in got], [200, 200, 503, 200, 200])
+        self.assertAnswer(got[2], 503, 'overloaded')
+        self.assertEqual(got[2][1].get('retry-after'), '600')
+        self.assertEqual(len(self.lines()), 4)
 
 
 class Storage(FeedbackCase):
@@ -576,29 +610,76 @@ class Units(unittest.TestCase):
         self.assertEqual((serve.FEEDBACK_MAX_BYTES, serve.FEEDBACK_MAX_MESSAGES, serve.FEEDBACK_MAX_TEXT),
                          (262_144, 400, 65_536))
         self.assertEqual((serve.FEEDBACK_RATE.window_s, serve.FEEDBACK_RATE.max_hits), (600, 10))
+        self.assertEqual(serve.FEEDBACK_RATE.max_keys, 10_000)
         self.assertEqual(serve.FEEDBACK_GLOBAL_RATE.window_s, 3600)
         if 'ELFFUSS_FEEDBACK_GLOBAL_MAX' not in os.environ:
             self.assertEqual(serve.FEEDBACK_GLOBAL_RATE.max_hits, 200)
         if 'ELFFUSS_FEEDBACK_DAYS' not in os.environ:
             self.assertEqual(serve.FEEDBACK_KEEP_DAYS, 90)
-        self.assertEqual((serve.FEEDBACK_DAY_MAX_BYTES, serve.FEEDBACK_TOTAL_MAX_BYTES), (8 << 20, 200 << 20))
+            self.assertEqual(serve.FEEDBACK_DAY_MAX_BYTES, 2 << 20)
+        self.assertEqual(serve.FEEDBACK_TOTAL_MAX_BYTES, 200 << 20)
         self.assertEqual((serve.FEEDBACK_READ_TIMEOUT_S, serve.FEEDBACK_RETRY_AFTER_S), (10, 600))
         self.assertEqual(serve.FEEDBACK_TIDY_EVERY_S, 6 * 3600)
 
+    @staticmethod
+    def load(**env):
+        """serve.py cargado de nuevo con estas variables de entorno (y sin las de feedback de quien corre la prueba)."""
+        clean = {k: v for k, v in os.environ.items() if k not in ('ELFFUSS_FEEDBACK', 'ELFFUSS_REPORTS',
+                                                                  'ELFFUSS_FEEDBACK_DAYS')}
+        clean.update(env)
+        with mock.patch.dict(os.environ, clean, clear=True):
+            spec = importlib.util.spec_from_file_location('elffuss_serve_env', SERVE_PY)
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+        return module
+
     def test_the_store_sits_next_to_reports_jsonl_unless_told_otherwise(self):
-        def load(**env):
-            clean = {k: v for k, v in os.environ.items() if k not in ('ELFFUSS_FEEDBACK', 'ELFFUSS_REPORTS')}
-            clean.update(env)
-            with mock.patch.dict(os.environ, clean, clear=True):
-                spec = importlib.util.spec_from_file_location('elffuss_serve_env', SERVE_PY)
-                module = importlib.util.module_from_spec(spec)
-                spec.loader.exec_module(module)
-            return Path(module.FEEDBACK_PATH)
-        self.assertEqual(load(), Path.home() / 'elffuss' / 'feedback.jsonl')
-        self.assertEqual(load(ELFFUSS_REPORTS=os.path.join('srv', 'datos', 'reports.jsonl')),
+        def where(**env):
+            return Path(self.load(**env).FEEDBACK_PATH)
+        self.assertEqual(where(), Path.home() / 'elffuss' / 'feedback.jsonl')
+        self.assertEqual(where(ELFFUSS_REPORTS=os.path.join('srv', 'datos', 'reports.jsonl')),
                          Path('srv', 'datos', 'feedback.jsonl'))
-        self.assertEqual(load(ELFFUSS_REPORTS='srv/datos/reports.jsonl', ELFFUSS_FEEDBACK='otra/fb.jsonl'),
+        self.assertEqual(where(ELFFUSS_REPORTS='srv/datos/reports.jsonl', ELFFUSS_FEEDBACK='otra/fb.jsonl'),
                          Path('otra', 'fb.jsonl'))
+
+    def test_the_daily_cap_binds_before_the_total(self):
+        # Los días que se guardan más el de hoy, todos llenos, caben en el total:
+        # llenar un día solo cierra ese día, nunca los meses que tarda la poda.
+        for days, kept in ((None, 90), ('90', 90), ('0', 0), ('30', 30), ('120', 120), ('365', 365), ('-3', 0)):
+            with self.subTest(days=days):
+                module = self.load(**({} if days is None else {'ELFFUSS_FEEDBACK_DAYS': days}))
+                self.assertEqual(module.FEEDBACK_KEEP_DAYS, kept)
+                self.assertLessEqual(module.FEEDBACK_DAY_MAX_BYTES * (module.FEEDBACK_KEEP_DAYS + 1),
+                                     module.FEEDBACK_TOTAL_MAX_BYTES)
+                self.assertLessEqual(module.FEEDBACK_DAY_MAX_BYTES, 2 << 20)
+
+    def test_the_client_key_is_the_address_or_its_ipv6_56(self):
+        key = serve._feedback_rate_key
+        self.assertEqual(key('192.0.2.7'), '192.0.2.7')
+        self.assertEqual(key('::ffff:192.0.2.7'), '192.0.2.7')
+        self.assertEqual(key('2001:db8:1:2ff:abcd::9'), '2001:db8:1:200::/56')
+        self.assertEqual(key('2001:db8:1:2ff::1'), key('2001:db8:1:200::1'))
+        self.assertNotEqual(key('2001:db8:1:300::1'), key('2001:db8:1:200::1'))
+        self.assertEqual(key('no-es-una-ip' * 20), ('no-es-una-ip' * 20)[:64])
+
+    def test_the_limiter_can_look_without_spending(self):
+        limiter = serve._FeedbackLimiter(60, 2)
+        self.assertFalse(limiter.full('*'))
+        self.assertFalse(limiter.full('*'), 'mirar no gasta')
+        self.assertTrue(limiter.allow('*'))
+        self.assertFalse(limiter.full('*'))
+        self.assertTrue(limiter.allow('*'))
+        self.assertTrue(limiter.full('*'))
+        self.assertFalse(limiter.allow('*'))
+
+    def test_the_table_of_clients_has_a_cap_and_frees_keys_that_expired(self):
+        limiter = serve._FeedbackLimiter(0.4, 2, max_keys=2)
+        self.assertEqual([limiter.take(k) for k in ('a', 'b', 'a', 'a', 'c', 'b')],
+                         ['ok', 'ok', 'ok', 'limited', 'crowded', 'ok'])
+        self.assertEqual(len(limiter._hits), 2, 'una clave que no entró no ocupa sitio')
+        time.sleep(0.5)
+        self.assertEqual(limiter.take('c'), 'ok', 'pasada la ventana, las claves viejas se van')
+        self.assertEqual(sorted(limiter._hits), ['c'])
 
     def test_the_probe_mode_needs_loopback_and_no_forwarded_for(self):
         def probe(peer, **headers):

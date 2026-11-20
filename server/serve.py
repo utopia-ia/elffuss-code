@@ -529,28 +529,76 @@ PROXY_RATE = _RateLimiter(PROXY_RATE_WINDOW_S, PROXY_RATE_MAX)
 # la IP: de él no se aprovecha ni el registro ni el límite.
 #  · quién llama, lo primero (_proxy_caller_ok): así otra web no gasta desde el
 #    navegador de alguien el cupo de esa persona;
-#  · límites solo en memoria, por cliente (_rate_key: una IPv6 cuenta por su
-#    /64) y entre todos; no se escriben ni salen en el log;
+#  · límites solo en memoria, por cliente (_feedback_rate_key: una IPv6 cuenta
+#    por su /56) y entre todos; no se escriben ni salen en el log. El cupo de
+#    todos solo lo gasta un envío que pasa el esquema y la red de seguridad: la
+#    basura de unos pocos no cierra la puerta a los demás;
 #  · ni una línea en el log por envío, tampoco la de la petición
 #    (_feedback_unlogged): con su hora, y las líneas del fichero en orden de
 #    llegada, se sabría qué línea mandó quién;
 #  · Content-Length obligatorio, tope de 256 KiB y un plazo total para leer;
 #  · un .jsonl por día UTC, 0600 en una carpeta 0700, con tope por día y en
-#    total, y 90 días de vida (los poda un hilo aunque nadie mande nada);
+#    total, y 90 días de vida (los poda un hilo aunque nadie mande nada). Manda
+#    el tope del día: llenarlo cuesta como mucho lo que queda de ese día;
 #  · la respuesta es {"ok":true} o {"ok":false,"error":"<código>"}: nunca
 #    repite nada de lo recibido ni el texto de una excepción.
+class _FeedbackLimiter(_RateLimiter):
+    """El _RateLimiter de /proxy con dos cosas más. full() mira sin gastar: así
+    se rechaza antes de leer el cuerpo sin que lo que luego no vale gaste el
+    cupo de todos. max_keys pone tope a las claves que se recuerdan: con la
+    tabla llena de claves vivas, una nueva no entra (take da 'crowded') en vez
+    de crecer con cada dirección que alguien estrene."""
+
+    def __init__(self, window_s, max_hits, max_keys=None):
+        super().__init__(window_s, max_hits)
+        self.max_keys = max_keys
+
+    def _live(self, key, now):
+        return [t for t in self._hits.get(key, ()) if now - t < self.window_s]
+
+    def full(self, key):
+        """True si a key no le queda cupo. No gasta nada."""
+        with self._lock:
+            return len(self._live(key, time.monotonic())) >= self.max_hits
+
+    def take(self, key):
+        """Gasta una de key → 'ok', 'limited' (sin cupo) o 'crowded' (key es
+        nueva y ya hay max_keys claves con algo dentro de la ventana)."""
+        now = time.monotonic()
+        with self._lock:
+            crowded = self.max_keys is not None and key not in self._hits and len(self._hits) >= self.max_keys
+            # La barrida de siempre, una por ventana; con la tabla llena, además,
+            # una por segundo como mucho, para soltar las claves que ya caducaron.
+            if now - self._swept > self.window_s or (crowded and now - self._swept >= 1):
+                self._hits = {k: v for k, v in self._hits.items() if v and now - v[-1] < self.window_s}
+                self._swept = now
+                crowded = crowded and len(self._hits) >= self.max_keys
+            if crowded:
+                return 'crowded'
+            hits = self._live(key, now)
+            ok = len(hits) < self.max_hits
+            if ok:
+                hits.append(now)
+            self._hits[key] = hits
+            return 'ok' if ok else 'limited'
+
+
 FEEDBACK_PATH = os.environ.get('ELFFUSS_FEEDBACK') or str(
     Path(os.environ.get('ELFFUSS_REPORTS') or (Path.home() / 'elffuss' / 'reports.jsonl')).parent / 'feedback.jsonl')
 FEEDBACK_MAX_BYTES = 262_144          # = CAPS.bodyBytes de feedback-payload.js = client_max_body_size de nginx
 FEEDBACK_MAX_MESSAGES = 400
 FEEDBACK_MAX_TEXT = 65_536            # puntos de código por texto
 FEEDBACK_READ_TIMEOUT_S = 10          # para el cuerpo ENTERO, no por lectura
-FEEDBACK_RATE = _RateLimiter(600, 10)                                   # por cliente: 10 cada 10 minutos
-FEEDBACK_GLOBAL_RATE = _RateLimiter(3600, int(os.environ.get('ELFFUSS_FEEDBACK_GLOBAL_MAX') or 200))   # entre todos, por hora
+FEEDBACK_RATE = _FeedbackLimiter(600, 10, max_keys=10_000)              # por cliente: 10 cada 10 minutos
+FEEDBACK_GLOBAL_RATE = _FeedbackLimiter(3600, int(os.environ.get('ELFFUSS_FEEDBACK_GLOBAL_MAX') or 200))   # entre todos, por hora
 FEEDBACK_RETRY_AFTER_S = 600
-FEEDBACK_DAY_MAX_BYTES = 8 * 1024 * 1024
 FEEDBACK_TOTAL_MAX_BYTES = 200 * 1024 * 1024
-FEEDBACK_KEEP_DAYS = int(os.environ.get('ELFFUSS_FEEDBACK_DAYS') or 90)
+FEEDBACK_KEEP_DAYS = max(0, int(os.environ.get('ELFFUSS_FEEDBACK_DAYS') or 90))
+# El tope del día es el que manda: los días que se guardan más el de hoy caben
+# enteros en el total. Quien llene un día (abusando, por ejemplo) cierra lo que
+# queda de ese día UTC y nada más; si mandase el total, la puerta seguiría
+# cerrada hasta que la poda borrase algo, meses después.
+FEEDBACK_DAY_MAX_BYTES = min(2 * 1024 * 1024, FEEDBACK_TOTAL_MAX_BYTES // (FEEDBACK_KEEP_DAYS + 1))
 FEEDBACK_TIDY_EVERY_S = 6 * 3600
 # La red de seguridad de después del anonimizador, la misma que LEFTOVER de
 # anonymize.js: correos, enlaces que no son elffuss.com sin ruta, www.algo y
@@ -630,6 +678,16 @@ def _feedback_is_json(headers):
     """Content-Type application/json, con parámetros o sin ellos."""
     values = headers.get_all('Content-Type') or []
     return len(values) == 1 and values[0].split(';', 1)[0].strip().lower() == 'application/json'
+
+
+def _feedback_rate_key(ip_text):
+    """La clave del límite por cliente: la de _rate_key, salvo que una IPv6
+    cuenta por su /56. Una casa suele recibir un /56 entero (256 /64): contada
+    por /64, una sola conexión serían 256 clientes."""
+    ip = _parse_ip(ip_text)
+    if ip is not None and ip.version == 6 and ip.ipv4_mapped is None:
+        return str(ipaddress.IPv6Network((int(ip) >> 72 << 72, 56)))
+    return _rate_key(ip_text)
 
 
 def _feedback_read(h, length, keep=True):
@@ -951,9 +1009,12 @@ def _feedback_handle(h):
         return refuse(415, 'content-type')
     if length_error:                                                 # 3 y 4. longitud (413 sin leer)
         return _feedback_answer(h, *length_error)
-    if not FEEDBACK_RATE.allow(_rate_key(h.client_ip())):            # 5. por cliente, en memoria
+    took = FEEDBACK_RATE.take(_feedback_rate_key(h.client_ip()))     # 5. por cliente, en memoria
+    if took == 'limited':
         return refuse(429, 'rate-limited', FEEDBACK_RETRY_AFTER_S)
-    if not FEEDBACK_GLOBAL_RATE.allow('*'):                          # 6. entre todos
+    # 6. Entre todos: aquí solo se mira, el cupo lo gasta un envío que pasa de
+    # la 8 a la 10. Una tabla de clientes llena también es «demasiado».
+    if took != 'ok' or FEEDBACK_GLOBAL_RATE.full('*'):
         return refuse(503, 'overloaded', FEEDBACK_RETRY_AFTER_S)
     body = _feedback_read(h, length)                                 # 7. el cuerpo, con plazo
     if body is None:
@@ -971,8 +1032,10 @@ def _feedback_handle(h):
         return _feedback_answer(h, 400, 'schema')
     if leftover:
         return _feedback_answer(h, 422, 'leftover')
-    if _feedback_is_probe(h):                                        # 11. la sonda no escribe
+    if _feedback_is_probe(h):                                        # 11. la sonda no escribe ni gasta
         return _feedback_answer(h, 204) if _feedback_ready() else _feedback_answer(h, 500, 'storage')
+    if not FEEDBACK_GLOBAL_RATE.allow('*'):                          # 6 bis. ahora sí, el cupo de todos
+        return _feedback_answer(h, 503, 'overloaded', FEEDBACK_RETRY_AFTER_S)
     line = (json.dumps(payload, ensure_ascii=False, separators=(',', ':')) + '\n').encode('utf-8')
     try:                                                             # 12. guardar
         stored = _feedback_store(line)
