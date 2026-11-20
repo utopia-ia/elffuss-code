@@ -17,7 +17,7 @@
 {"text": "en \/home\/ana", "hit": true},
 {"text": "C:\\Users\\ana", "hit": true},
 {"text": "-----BEGIN RSA PRIVATE KEY-----", "hit": true},
-{"text": "npm install react@18.2.0", "hit": false},
+{"text": "npm install react@18.2.0", "hit": true},
 {"text": "@app.route('/x')", "hit": false},
 {"parts": ["sk-", "proj-4fGh7KlMn2PqRsTuVwXyZ0aB"], "hit": true},
 {"parts": ["AKIA", "IOSFODNN7EXAMPLE"], "hit": true},
@@ -26,5 +26,18 @@
 {"text": "https://elffuss.com/.evil", "hit": true},
 {"text": "«https://elffuss.com»", "hit": false},
 {"text": "https://claw.elffuss.com/\nnext", "hit": false},
-{"text": "id ab12345 ok", "hit": true}
+{"text": "id ab12345 ok", "hit": true},
+{"text": "mi correo es zuri.etxe@gmail (el de siempre)", "hit": true},
+{"text": "mi correo es zuri.etxe@gmail,com", "hit": true},
+{"text": "mi correo es zuri.etxe@\n[URL_1]", "hit": true},
+{"text": "```bash\nssh zuri.etxe@[IP_1]\n```", "hit": true},
+{"text": "josé@correo.es", "hit": true},
+{"text": "npm install @types/node", "hit": false},
+{"text": "import x from '@types/node'", "hit": false},
+{"text": "[INC_123456789]", "hit": true},
+{"text": "pedido [AMZ_4061234567]", "hit": true},
+{"text": "mi tarjeta [CARD_4111111111111111]", "hit": true},
+{"text": "[NUMBER_1234567]", "hit": true},
+{"text": "[PERSON_01234]", "hit": true},
+{"text": "[NUMBER_123456] y [SECRET_7]", "hit": false}
 ]

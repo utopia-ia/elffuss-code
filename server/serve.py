@@ -602,15 +602,22 @@ FEEDBACK_KEEP_DAYS = max(0, int(os.environ.get('ELFFUSS_FEEDBACK_DAYS') or 90))
 FEEDBACK_DAY_MAX_BYTES = min(2 * 1024 * 1024, FEEDBACK_TOTAL_MAX_BYTES // (FEEDBACK_KEEP_DAYS + 1))
 FEEDBACK_TIDY_EVERY_S = 6 * 3600
 # La red de seguridad de después del anonimizador, la misma que LEFTOVER de
-# anonymize.js: correos, enlaces que no son elffuss.com sin ruta, www.algo y
-# carpetas personales (ci); 5 cifras seguidas o más, claves con prefijo
-# conocido, JWT y claves privadas (cs). Las etiquetas [TIPO_n] se tapan antes
-# con espacios del mismo largo. re.A en las dos: sin él, [a-z] con re.I casaría
-# también la s larga y el signo Kelvin, y en JS (sin la bandera u) no casan.
-# Se cambian a la vez aquí, en la otra copia de este bloque y en anonymize.js.
-FEEDBACK_LEFTOVER_CI = re.compile(r'''[^ \t\r\n@]@[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}|(?:https?|ftp)://(?!(?:[a-z0-9-]+\.)*elffuss\.com/?[.,;:!?)\]'"»”]*(?:[ \t\r\n<>]|$))|(?<![a-z0-9.-])www\.[a-z0-9-]+\.[a-z]{2,}|/(?:users|home)/[a-z0-9._-]|[a-z]:\\(?:users|documents and settings)\\''', re.I | re.A)
+# anonymize.js (los tres textos están en tests/fixtures/leftover-patterns.json,
+# igual en elffuss-home, elffuss-claw y elffuss-code). ci: una letra o cifra
+# ASCII (o . _ % + = -) pegada a una @, con dominio detrás o sin él
+# (zuri.etxe@gmail, alguien@[IP_1]); cualquier otro carácter pegado a una @ con
+# un dominio detrás (josé@correo.es); enlaces que no son elffuss.com sin ruta,
+# www.algo y carpetas personales. Una @ sin nada pegado delante (@types/node,
+# '@babel/core') no cuenta. cs: 5 cifras seguidas o más, claves con prefijo
+# conocido, JWT y claves privadas. Antes se tapan con espacios del mismo largo
+# las etiquetas que escribe el anonimizador, y solo esas: [PERSON_1] sí,
+# [INC_123456789] o [CARD_4111111111111111] no, así que sus cifras cuentan.
+# re.A en las dos: sin él, [a-z] con re.I casaría también la s larga y el
+# signo Kelvin, y en JS (sin la bandera u) no casan. Se cambian a la vez aquí,
+# en la otra copia de este bloque y en anonymize.js.
+FEEDBACK_LEFTOVER_CI = re.compile(r'''[a-z0-9._%+=-]@|[^ \t\r\n@]@[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}|(?:https?|ftp)://(?!(?:[a-z0-9-]+\.)*elffuss\.com/?[.,;:!?)\]'"»”]*(?:[ \t\r\n<>]|$))|(?<![a-z0-9.-])www\.[a-z0-9-]+\.[a-z]{2,}|/(?:users|home)/[a-z0-9._-]|[a-z]:\\(?:users|documents and settings)\\''', re.I | re.A)
 FEEDBACK_LEFTOVER_CS = re.compile(r'''[0-9]{5,}|(?<![A-Za-z0-9_-])(?:sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|glpat-[A-Za-z0-9_-]{20,}|xox[abprs]-[A-Za-z0-9-]{10,}|(?:AKIA|ASIA)[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35}|hf_[A-Za-z0-9]{30,}|npm_[A-Za-z0-9]{30,})|(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}|-----BEGIN [A-Z ]*PRIVATE KEY-----''', re.A)
-FEEDBACK_PLACEHOLDER = re.compile(r'\[[A-Z]+_[0-9]+\]')
+FEEDBACK_PLACEHOLDER = re.compile(r'\[(?:PERSON|ORG|PLACE|NAME|EMAIL|PHONE|ID|IBAN|CARD|ADDRESS|POSTCODE|URL|IP|DATE|AMOUNT|NUMBER|SECRET|PATH)_[1-9][0-9]{0,5}\]')
 
 _FB_KEYS = frozenset(('v', 'action', 'rated', 'app', 'build', 'model', 'lang', 'anonymizer', 'cut', 'messages'))
 _FB_MESSAGE_KEYS = frozenset(('role', 'text', 'end'))
@@ -788,8 +795,9 @@ def _feedback_schema_error(p):
 
 
 def _feedback_leftover(text):
-    """¿Queda en text algo con pinta de dato personal? Las etiquetas [TIPO_n]
-    se tapan antes con espacios del mismo largo."""
+    """¿Queda en text algo con pinta de dato personal? Las etiquetas del
+    anonimizador ([PERSON_1], [NUMBER_12345]: uno de sus 18 tipos y de 1 a 6
+    cifras sin cero delante) se tapan antes con espacios del mismo largo."""
     masked = FEEDBACK_PLACEHOLDER.sub(lambda m: ' ' * len(m.group()), text)
     return bool(FEEDBACK_LEFTOVER_CI.search(masked) or FEEDBACK_LEFTOVER_CS.search(masked))
 
