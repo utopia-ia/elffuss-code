@@ -180,7 +180,9 @@ class Accepts(FeedbackCase):
         everything = self.path.read_text(encoding='utf-8') + self.err.getvalue()
         for trace in ('198.51.100.77', 'AgenteDePrueba'):
             self.assertNotIn(trace, everything)
-        self.assertIn('"POST /proxy/feedback HTTP/1.1" 200', self.err.getvalue())
+        # Ni la línea de la petición: con la hora que le pone journald, y las
+        # líneas guardadas en orden de llegada, diría cuál mandó quién.
+        self.assertEqual(self.err.getvalue(), '', 'un envío guardado no deja nada en el log')
         self.assertEqual(os.listdir(self.dir), ['feedback.jsonl'])
         self.assertEqual(stat.S_IMODE(self.path.stat().st_mode), 0o600)
         self.assertEqual(stat.S_IMODE(self.dir.stat().st_mode), 0o700)
@@ -344,6 +346,21 @@ class Refuses(FeedbackCase):
                 self.assertNotIn(marker, ' '.join(hdrs.values()))
         self.assertNotIn(marker, self.err.getvalue())
 
+    def test_refusals_leave_nothing_in_the_log_either(self):
+        leftover = json.loads(json.dumps(EXAMPLE))
+        leftover['messages'][0]['text'] = 'escribe a ana@correo.es'
+        with mock.patch.object(serve, 'FEEDBACK_RATE', serve._RateLimiter(600, 1)):
+            got = [self.post(EXAMPLE, headers={'Sec-Fetch-Site': 'cross-site'})[0],
+                   self.post(EXAMPLE, headers={'Content-Type': 'text/plain'})[0],
+                   self.send(length=None)[0], self.send(length='abc')[0],
+                   self.send(length=serve.FEEDBACK_MAX_BYTES + 1)[0],
+                   self.send(b'{"v": 1}', headers={'X-Forwarded-For': '192.0.2.1'})[0],
+                   self.send(b'{"v": 1}', headers={'X-Forwarded-For': '192.0.2.1'})[0],
+                   self.post(leftover, headers={'X-Forwarded-For': '192.0.2.2'})[0],
+                   self.send(b'{', headers={'X-Forwarded-For': '192.0.2.3'})[0]]
+        self.assertEqual(got, [403, 415, 411, 400, 413, 400, 429, 422, 400])
+        self.assertEqual(self.err.getvalue(), '')
+
     def test_only_post_to_the_exact_path(self):
         for path in ('/proxy/feedback?x=1', '/proxy/feedback/', '/proxy/feedbacks', '/proxy/Feedback'):
             with self.subTest(path=path):
@@ -478,7 +495,7 @@ class Storage(FeedbackCase):
         os.chmod(self.dir, 0o500)
         self.addCleanup(os.chmod, self.dir, 0o700)
         self.assertAnswer(self.post(EXAMPLE), 500, 'storage')
-        self.assertIn('· feedback: storage failed (PermissionError)\n', self.err.getvalue())
+        self.assertEqual(self.err.getvalue(), '· feedback: storage failed (PermissionError)\n', 'esa línea y nada más')
         self.assertFalse(self.path.exists())
 
     def test_nothing_is_ever_written_inside_the_static_root(self):
@@ -507,7 +524,7 @@ class Storage(FeedbackCase):
         with mock.patch.object(serve.os, 'write', half_then_full_disk):
             self.assertAnswer(self.post(EXAMPLE), 500, 'storage')
         self.assertEqual(self.path.read_bytes(), before)
-        self.assertIn('· feedback: storage failed (OSError)\n', self.err.getvalue())
+        self.assertEqual(self.err.getvalue(), '· feedback: storage failed (OSError)\n', 'esa línea y nada más')
 
 
 class Probe(FeedbackCase):
@@ -596,6 +613,46 @@ class Units(unittest.TestCase):
         self.assertFalse(probe('127.0.0.1', X_Feedback_Probe='1', X_Forwarded_For=''))
         self.assertFalse(probe('127.0.0.1', X_Feedback_Probe='yes'))
         self.assertFalse(probe('127.0.0.1'))
+
+    def test_an_answer_to_someone_who_already_left_raises_nothing(self):
+        # Si saltase, socketserver escribiría la traza en stderr, con su hora.
+        class Gone:
+            def __init__(self, fail_on):
+                self.fail_on, self.close_connection, self.sent = fail_on, False, []
+                self.wfile = types.SimpleNamespace(write=self.write)
+
+            def send_response(self, status):
+                self.sent.append(status)
+
+            def send_header(self, name, value):
+                pass
+
+            def _proxy_safety_headers(self):
+                pass
+
+            def end_headers(self):
+                if self.fail_on == 'headers':
+                    raise BrokenPipeError(errno.EPIPE, 'Broken pipe')
+
+            def write(self, data):
+                raise ConnectionResetError(errno.ECONNRESET, 'Connection reset by peer')
+        for fail_on in ('headers', 'body'):
+            with self.subTest(fail_on=fail_on):
+                h = Gone(fail_on)
+                serve._feedback_answer(h, 200)
+                self.assertEqual(h.sent, [200])
+                self.assertTrue(h.close_connection)
+
+    def test_a_connection_error_on_this_path_is_not_logged_and_elsewhere_it_is(self):
+        def log_error(path):
+            h = serve.Handler.__new__(serve.Handler)   # sin conexión: solo el método
+            h.path = path
+            err = io.StringIO()
+            with mock.patch.object(serve.sys, 'stderr', err):
+                h.log_error('Request timed out: %r', TimeoutError('timed out'))
+            return err.getvalue()
+        self.assertEqual(log_error('/proxy/feedback'), '')
+        self.assertEqual(log_error('/proxy/report'), "· Request timed out: TimeoutError('timed out')\n")
 
     def test_reading_the_body_has_a_total_deadline(self):
         class Drip:   # un byte cada 0,2 s, para siempre: ningún timeout por lectura salta

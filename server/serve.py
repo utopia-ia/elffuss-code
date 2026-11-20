@@ -531,6 +531,9 @@ PROXY_RATE = _RateLimiter(PROXY_RATE_WINDOW_S, PROXY_RATE_MAX)
 #    navegador de alguien el cupo de esa persona;
 #  · límites solo en memoria, por cliente (_rate_key: una IPv6 cuenta por su
 #    /64) y entre todos; no se escriben ni salen en el log;
+#  · ni una línea en el log por envío, tampoco la de la petición
+#    (_feedback_unlogged): con su hora, y las líneas del fichero en orden de
+#    llegada, se sabría qué línea mandó quién;
 #  · Content-Length obligatorio, tope de 256 KiB y un plazo total para leer;
 #  · un .jsonl por día UTC, 0600 en una carpeta 0700, con tope por día y en
 #    total, y 90 días de vida (los poda un hilo aunque nadie mande nada);
@@ -883,6 +886,17 @@ def _feedback_is_probe(h):
             and h.headers.get('X-Forwarded-For') is None)
 
 
+def _feedback_unlogged(h):
+    """¿Es una petición a /proxy/feedback? Esas no dejan línea en el log: ni la
+    de la petición (Handler.log_request) ni la de un fallo de la conexión
+    (Handler.log_error). journald pone hora a cada línea y el fichero guarda
+    los envíos en orden de llegada: la k-ésima línea del log de un día sería la
+    k-ésima del fichero, y su hora, cruzada con el log de nginx, la IP de quien
+    la mandó. Lo único que se escribe es «feedback: storage failed (<clase>)»,
+    y entonces no se ha guardado nada."""
+    return getattr(h, 'path', None) == '/proxy/feedback'
+
+
 def _feedback_answer(h, status, error=None, retry_after=None):
     """Toda respuesta de /proxy/feedback: JSON fijo, nada de la entrada."""
     if status == 204:
@@ -903,9 +917,15 @@ def _feedback_answer(h, status, error=None, retry_after=None):
         h.send_header('Retry-After', str(retry_after))
     h.send_header('Connection', 'close')
     h._proxy_safety_headers()
-    h.end_headers()
-    if body:
-        h.wfile.write(body)
+    try:
+        h.end_headers()
+        if body:
+            h.wfile.write(body)
+    except OSError:
+        # Quien preguntó ya no está (nginx cierra si el navegador se va). Sin
+        # esto, socketserver escribiría la traza en stderr, con hora: justo lo
+        # que _feedback_unlogged evita.
+        h.close_connection = True
 
 
 def _feedback_handle(h):
@@ -1104,6 +1124,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         return _feedback_handle(self)
 
     def log_request(self, code='-', size='-'):
+        if _feedback_unlogged(self):
+            return
         if isinstance(code, HTTPStatus):
             code = code.value
         line = self.requestline
@@ -1111,6 +1133,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if path.startswith('/proxy?'):
             line = '%s /proxy?url=%s' % (self.command, _log_target(path))
         self.log_message('"%s" %s %s', line, str(code), str(size))
+
+    def log_error(self, fmt, *args):
+        if _feedback_unlogged(self):
+            return
+        super().log_error(fmt, *args)
 
     def log_message(self, fmt, *args):
         sys.stderr.write('· %s\n' % (fmt % args))
