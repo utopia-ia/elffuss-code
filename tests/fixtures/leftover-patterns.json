@@ -1,0 +1,5 @@
+{
+"ci": "[a-z0-9._%+=-]@|[^ \\t\\r\\n@]@[a-z0-9-]+(?:\\.[a-z0-9-]+)*\\.[a-z]{2,}|(?:https?|ftp)://(?!(?:[a-z0-9-]+\\.)*elffuss\\.com/?[.,;:!?)\\]'\"»”]*(?:[ \\t\\r\\n<>]|$))|(?<![a-z0-9.-])www\\.[a-z0-9-]+\\.[a-z]{2,}|/(?:users|home)/[a-z0-9._-]|[a-z]:\\\\(?:users|documents and settings)\\\\",
+"cs": "[0-9]{5,}|(?<![A-Za-z0-9_-])(?:sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|glpat-[A-Za-z0-9_-]{20,}|xox[abprs]-[A-Za-z0-9-]{10,}|(?:AKIA|ASIA)[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35}|hf_[A-Za-z0-9]{30,}|npm_[A-Za-z0-9]{30,})|(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9_-]{8,}|-----BEGIN [A-Z ]*PRIVATE KEY-----",
+"placeholder": "\\[(?:PERSON|ORG|PLACE|NAME|EMAIL|PHONE|ID|IBAN|CARD|ADDRESS|POSTCODE|URL|IP|DATE|AMOUNT|NUMBER|SECRET|PATH)_[1-9][0-9]{0,5}\\]"
+}

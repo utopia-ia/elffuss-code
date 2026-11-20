@@ -5,19 +5,24 @@ avisos del chat de elffuss.com, que llegan ya anonimizados del navegador.
 El mismo fichero en elffuss-claw y en elffuss-code, como el bloque de serve.py
 que prueba. Sin red: el servidor escucha en un puerto libre de 127.0.0.1 y
 guarda en una carpeta temporal (FEEDBACK_PATH sustituido), así que nada toca la
-carpeta de verdad. Los casos del esquema y de la red de seguridad son los de
-tests/fixtures/feedback-payloads.json y tests/fixtures/leftover-cases.json,
-los mismos que usa el chat.
+carpeta de verdad. Los casos del esquema y de la red de seguridad, y el texto
+de los patrones, están en tests/fixtures/feedback-payloads.json,
+leftover-cases.json y leftover-patterns.json: los mismos bytes en elffuss-home
+(tests/feedback-payload.mjs y tests/anonymize.mjs), elffuss-claw y
+elffuss-code. Esta prueba fija su sha256 (SHARED), la del chat también: si se
+cambian en un repo, se copian a los otros dos y se cambia el sha256 en los tres.
 
     python3 tests/test_feedback.py
 """
 import datetime
 import errno
+import hashlib
 import http.client
 import importlib.util
 import io
 import json
 import os
+import re
 import shutil
 import socket
 import socketserver
@@ -38,8 +43,15 @@ _spec = importlib.util.spec_from_file_location('elffuss_serve_feedback', SERVE_P
 serve = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(serve)
 
+# sha256 de los ficheros que se copian byte a byte entre elffuss-home, elffuss-claw y elffuss-code.
+SHARED = {
+    'feedback-payloads.json': '463fe48fcbcad552fc5b062eec85f957a31bd8d5255af72bdb13c8464b56d6af',
+    'leftover-cases.json': '4f2571a50f68389ec738b0ac607e3a9f585c40fb63a9c6edcf38c65ced70c034',
+    'leftover-patterns.json': 'e60e7c3fd9fb9d225398f985cd8b03287503acf10c1f9f5d6959d92f5c28003c',
+}
 PAYLOADS = json.loads((HERE / 'fixtures' / 'feedback-payloads.json').read_text(encoding='utf-8'))
 LEFTOVER_CASES = json.loads((HERE / 'fixtures' / 'leftover-cases.json').read_text(encoding='utf-8'))
+PATTERNS = json.loads((HERE / 'fixtures' / 'leftover-patterns.json').read_text(encoding='utf-8'))
 EXAMPLE = PAYLOADS['valid'][0]['payload']   # el «no me gusta» de ejemplo de la especificación
 # Lo que manda server/proxy-probe.py --feedback.
 PROBE_BODY = (b'{"v":1,"action":"report","rated":null,"app":"chat","build":"probe","model":null,"lang":"en",'
@@ -316,7 +328,8 @@ class Refuses(FeedbackCase):
                 if entry['expect'] == 'leftover':
                     self.assertAnswer(got, 422, 'leftover')
                 else:
-                    self.assertAnswer(got, 400, 'schema')
+                    self.assertIn(entry['expect'], ('schema', 'bad-json'))
+                    self.assertAnswer(got, 400, entry['expect'])
         self.assertFalse(self.dir.exists(), 'ni la carpeta')
 
     def test_numbers_must_be_real_integers(self):
@@ -635,11 +648,55 @@ class Probe(FeedbackCase):
 
 
 class Units(unittest.TestCase):
+    def test_the_shared_fixtures_are_the_same_bytes_as_in_the_other_repos(self):
+        for name, digest in SHARED.items():
+            with self.subTest(name):
+                self.assertEqual(hashlib.sha256((HERE / 'fixtures' / name).read_bytes()).hexdigest(), digest,
+                                 'cambiado solo aquí: se copia igual a elffuss-home, elffuss-claw y elffuss-code '
+                                 'y se cambia este sha256 en los tres')
+
+    def test_the_safety_net_is_the_shared_text_with_its_flags(self):
+        # El texto exacto de LEFTOVER en anonymize.js: un cambio de un solo lado
+        # haría que el chat mande lo que aquí se rechaza, o al revés.
+        self.assertEqual(sorted(PATTERNS), ['ci', 'cs', 'placeholder'])
+        self.assertEqual(serve.FEEDBACK_LEFTOVER_CI.pattern, PATTERNS['ci'])
+        self.assertEqual(serve.FEEDBACK_LEFTOVER_CS.pattern, PATTERNS['cs'])
+        self.assertEqual(serve.FEEDBACK_PLACEHOLDER.pattern, PATTERNS['placeholder'])
+        # ci sin distinguir mayúsculas y cs distinguiéndolas, las dos solo ASCII (en JS: 'gi' y 'g', sin u).
+        self.assertEqual(serve.FEEDBACK_LEFTOVER_CI.flags, re.IGNORECASE | re.ASCII)
+        self.assertEqual(serve.FEEDBACK_LEFTOVER_CS.flags, re.ASCII)
+
     def test_the_safety_net_matches_the_shared_cases(self):
         for case in LEFTOVER_CASES:
             text = case['text'] if 'text' in case else ''.join(case['parts'])
             with self.subTest(text=text):
                 self.assertEqual(serve._feedback_leftover(text), case['hit'])
+
+    def test_every_shared_payload_gets_the_answer_it_expects_from_the_validator(self):
+        # Lo mismo que Refuses y Accepts por HTTP, pero sin red: cada caso por la
+        # razón que dice su 'expect' (los del chat no dicen más).
+        for entry in PAYLOADS['valid']:
+            with self.subTest(entry['name']):
+                p = entry['payload']
+                self.assertIsNone(serve._feedback_schema_error(p))
+                self.assertFalse(any(serve._feedback_leftover(m['text']) for m in p['messages']
+                                     if m['role'] in ('user', 'assistant')))
+        for entry in PAYLOADS['invalid']:
+            with self.subTest(entry['name']):
+                p = entry['payload']
+                if entry['expect'] == 'bad-json':
+                    self.assertIsNot(type(p), dict)
+                    continue
+                bad = serve._feedback_schema_error(p)
+                if entry['expect'] == 'schema':
+                    self.assertIsNotNone(bad)
+                else:
+                    self.assertEqual(entry['expect'], 'leftover')
+                    self.assertIsNone(bad)
+                    self.assertTrue(any(serve._feedback_leftover(m['text']) for m in p['messages']
+                                        if m['role'] in ('user', 'assistant')))
+        names = [e['name'] for e in PAYLOADS['valid'] + PAYLOADS['invalid']]
+        self.assertEqual(len(names), len(set(names)), 'cada nombre una vez')
 
     def test_the_numbers_of_the_spec(self):
         self.assertEqual((serve.FEEDBACK_MAX_BYTES, serve.FEEDBACK_MAX_MESSAGES, serve.FEEDBACK_MAX_TEXT),
@@ -715,6 +772,21 @@ class Units(unittest.TestCase):
         time.sleep(0.5)
         self.assertEqual(limiter.take('c'), 'ok', 'pasada la ventana, las claves viejas se van')
         self.assertEqual(sorted(limiter._hits), ['c'])
+
+    def test_with_the_table_full_expired_keys_go_before_the_next_sweep_but_once_a_second_at_most(self):
+        clock = [1000.0]
+        with mock.patch.object(serve.time, 'monotonic', lambda: clock[0]):
+            limiter = serve._FeedbackLimiter(600, 2, max_keys=2)
+            self.assertEqual([limiter.take('a'), limiter.take('b')], ['ok', 'ok'])
+            clock[0] = 1300.0          # a y b siguen vivas: llena
+            self.assertEqual(limiter.take('c'), 'crowded')
+            self.assertEqual(limiter._swept, 1300.0, 'con la tabla llena se barre')
+            clock[0] = 1300.5
+            self.assertEqual(limiter.take('c'), 'crowded')
+            self.assertEqual(limiter._swept, 1300.0, 'pero no más de una vez por segundo')
+            clock[0] = 1650.0          # a y b caducaron (600 s); la barrida de siempre tocaría en 1900
+            self.assertEqual(limiter.take('c'), 'ok')
+            self.assertEqual(sorted(limiter._hits), ['c'])
 
     def test_the_probe_mode_needs_loopback_and_no_forwarded_for(self):
         def probe(peer, **headers):
