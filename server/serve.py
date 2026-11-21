@@ -15,6 +15,7 @@ import http.client
 import http.server
 import ipaddress
 import json
+import random
 import re
 import socket
 import socketserver
@@ -541,6 +542,9 @@ PROXY_RATE = _RateLimiter(PROXY_RATE_WINDOW_S, PROXY_RATE_MAX)
 #    0700, con tope por día y en total, y 90 días de vida (los poda un hilo
 #    aunque nadie mande nada). Manda el tope del día: llenarlo cuesta como
 #    mucho lo que queda de ese día;
+#  · un fichero guardado no lleva la hora de ningún envío: al cerrar el día, el
+#    hilo lo rehace (_feedback_scrub_locked). Si no, su creación sería la hora
+#    del primer envío del día y su mtime la del último, durante 90 días;
 #  · la respuesta es {"ok":true} o {"ok":false,"error":"<código>"}: nunca
 #    repite nada de lo recibido ni el texto de una excepción.
 class _FeedbackLimiter(_RateLimiter):
@@ -600,7 +604,11 @@ FEEDBACK_KEEP_DAYS = max(0, int(os.environ.get('ELFFUSS_FEEDBACK_DAYS') or 90))
 # queda de ese día UTC y nada más; si mandase el total, la puerta seguiría
 # cerrada hasta que la poda borrase algo, meses después.
 FEEDBACK_DAY_MAX_BYTES = min(2 * 1024 * 1024, FEEDBACK_TOTAL_MAX_BYTES // (FEEDBACK_KEEP_DAYS + 1))
-FEEDBACK_TIDY_EVERY_S = 6 * 3600
+# El hilo pasa justo después de cada 00:00 UTC (con este margen), para rehacer
+# enseguida el fichero del día que cierra, y como mucho cada hora, por si el
+# reloj salta.
+FEEDBACK_TIDY_EVERY_S = 3600
+FEEDBACK_TIDY_AFTER_MIDNIGHT_S = 2
 # La red de seguridad de después del anonimizador, la misma que LEFTOVER de
 # anonymize.js (los tres textos están en tests/fixtures/leftover-patterns.json,
 # igual en elffuss-home, elffuss-claw y elffuss-code). ci: una letra o cifra
@@ -812,6 +820,19 @@ def _feedback_today():   # las pruebas lo sustituyen
     return datetime.datetime.now(datetime.timezone.utc).date()
 
 
+def _feedback_to_midnight(now=None):
+    """Segundos (del reloj de verdad) que faltan para las próximas 00:00 UTC."""
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    midnight = datetime.datetime.combine(now.date() + datetime.timedelta(days=1), datetime.time(),
+                                         tzinfo=datetime.timezone.utc)
+    return (midnight - now).total_seconds()
+
+
+def _feedback_midnight_ns(day):
+    """Las 00:00 UTC de day, en nanosegundos: la mtime de un fichero ya rehecho."""
+    return int(datetime.datetime.combine(day, datetime.time(), tzinfo=datetime.timezone.utc).timestamp()) * 10**9
+
+
 def _feedback_rotated(path):
     """Los ficheros ya rotados junto a path → [(día, ruta)]. Solo los que se
     llaman exactamente <nombre>-AAAA-MM-DD[.N]<extensión>: nada más se toca."""
@@ -831,10 +852,60 @@ def _feedback_rotated(path):
     return found
 
 
-def _feedback_tidy_locked(path):
+def _feedback_scratch(path):
+    """Los temporales de _feedback_scrub_locked junto a path: .<nombre>-scrub-<16 hex>.tmp,
+    fuera de <nombre>*<extensión> (ni los rota, ni los poda, ni cuentan en el total)."""
+    return re.compile(re.escape('.%s-scrub-' % path.stem) + '[0-9a-f]{16}' + re.escape('.tmp'))
+
+
+def _feedback_write_all(fd, data):
+    view = memoryview(data)
+    while view:
+        done = os.write(fd, view)
+        if done <= 0:
+            raise OSError('os.write devolvió %d' % done)
+        view = view[done:]
+
+
+def _feedback_scrub_locked(path, day, old):
+    """Con _FEEDBACK_LOCK cogido, y solo desde el hilo: rehace old, el fichero
+    rotado del día ya cerrado day, para que no lleve la hora de ningún envío.
+    Del que se va, la creación es la del primer envío del día, mtime la del
+    último y ctime la del renombre. El nuevo tiene las mismas líneas, barajadas
+    (sin el orden de llegada), en un temporal aparte (O_EXCL, 0600); su mtime y
+    su atime pasan a las 00:00 UTC de day y os.replace lo pone en el sitio de
+    old: su creación y su ctime son de esta pasada, no de un envío. Un envío no
+    rehace nada: la creación y el ctime serían entonces la hora de ese envío."""
+    lines = [line for line in old.read_bytes().split(b'\n') if line]
+    random.SystemRandom().shuffle(lines)
+    tmp = old.with_name('.%s-scrub-%s.tmp' % (path.stem, os.urandom(8).hex()))
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, 'O_NOFOLLOW', 0) | getattr(os, 'O_CLOEXEC', 0)
+    fd = os.open(tmp, flags, 0o600)
+    try:
+        try:
+            _feedback_write_all(fd, b''.join(line + b'\n' for line in lines))
+            os.fsync(fd)   # antes de que sustituya al viejo
+        finally:
+            os.close(fd)
+        midnight = _feedback_midnight_ns(day)
+        os.utime(tmp, ns=(midnight, midnight))
+        os.replace(tmp, old)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except FileNotFoundError:
+            pass
+        raise
+
+
+def _feedback_tidy_locked(path, scrub=False):
     """Con _FEEDBACK_LOCK cogido: si el fichero activo es de un día UTC
     anterior a hoy, pasa a <nombre>-<ese día><extensión> (con .1, .2… si el
-    nombre ya existe); luego borra los rotados de hace más de FEEDBACK_KEEP_DAYS."""
+    nombre ya existe); luego borra los rotados de hace más de FEEDBACK_KEEP_DAYS.
+    Con scrub (el hilo, nunca un envío) además rehace los rotados que aún no lo
+    están, los que no tienen la mtime en las 00:00 UTC de su día
+    (_feedback_scrub_locked), y borra los temporales de una pasada cortada a
+    medias. Un fallo con un fichero no para los demás: se lanza al final."""
     today = _feedback_today()
     try:
         mtime = os.stat(path).st_mtime
@@ -849,33 +920,69 @@ def _feedback_tidy_locked(path):
                 n += 1
                 target = path.with_name('%s-%s.%d%s' % (path.stem, stamp, n, path.suffix))
             os.rename(path, target)
+    kept = []
     for day, old in _feedback_rotated(path):
         if (today - day).days > FEEDBACK_KEEP_DAYS:
             try:
                 old.unlink()
             except FileNotFoundError:
                 pass
+        else:
+            kept.append((day, old))
+    if not scrub:
+        return
+    failed = None
+    scratch = _feedback_scratch(path)
+    try:
+        with os.scandir(path.parent) as entries:
+            halves = [Path(entry.path) for entry in entries if scratch.fullmatch(entry.name)]
+    except (FileNotFoundError, NotADirectoryError):
+        halves = []
+    for half in halves:
+        try:
+            half.unlink()
+        except FileNotFoundError:
+            pass
+        except OSError as e:
+            failed = failed or e
+    for day, old in kept:
+        try:
+            if os.stat(old, follow_symlinks=False).st_mtime_ns != _feedback_midnight_ns(day):
+                _feedback_scrub_locked(path, day, old)
+        except FileNotFoundError:
+            pass
+        except Exception as e:  # noqa: BLE001 — se lanza después de intentar los demás
+            failed = failed or e
+    if failed is not None:
+        raise failed
 
 
 def _feedback_tidy():
-    """Rotar y podar sin escribir nada. Dentro de ROOT no se toca nada."""
+    """Rotar, rehacer y podar (lo del hilo). Dentro de ROOT no se toca nada."""
     path = Path(FEEDBACK_PATH)
     if _feedback_inside_root(path):
         return
     with _FEEDBACK_LOCK:
-        _feedback_tidy_locked(path)
+        _feedback_tidy_locked(path, scrub=True)
+
+
+def _feedback_janitor_wait(now=None):
+    """Segundos hasta la siguiente pasada del hilo: justo después de las
+    próximas 00:00 UTC, y nunca más de FEEDBACK_TIDY_EVERY_S."""
+    return min(FEEDBACK_TIDY_EVERY_S, _feedback_to_midnight(now) + FEEDBACK_TIDY_AFTER_MIDNIGHT_S)
 
 
 def _feedback_janitor():
     """Hilo de main() (solo de main(): las pruebas que importan este módulo no
-    tocan ninguna carpeta de verdad). Rota y poda al arrancar y luego cada 6
-    horas, para que los 90 días se cumplan aunque nadie mande nada."""
+    tocan ninguna carpeta de verdad). Pasa al arrancar, justo después de cada
+    00:00 UTC y como mucho cada hora: rota, rehace el fichero del día que acaba
+    de cerrar y poda, para que los 90 días se cumplan aunque nadie mande nada."""
     while True:
         try:
             _feedback_tidy()
         except Exception as e:  # noqa: BLE001 — un fallo de disco no mata el hilo
             sys.stderr.write('· feedback: tidy failed (%s)\n' % type(e).__name__)
-        time.sleep(FEEDBACK_TIDY_EVERY_S)
+        time.sleep(_feedback_janitor_wait())
 
 
 def _feedback_total(path):
@@ -905,7 +1012,8 @@ def _feedback_store(line):
     """Anexa una línea (bytes) al fichero del día → True, o False si con ella
     se pasaría del tope del día o del total (503 full). Cualquier otro fallo es
     una excepción. La línea es ASCII puro (ver _feedback_line): un envío es una
-    línea, y se lee igual con for line in f que con str.splitlines()."""
+    línea, y se lee igual con for line in f que con str.splitlines(). Rota y
+    poda, pero nunca rehace un fichero (lo hace el hilo: _feedback_scrub_locked)."""
     path = Path(FEEDBACK_PATH)
     if _feedback_inside_root(path):
         raise _FeedbackInsideRoot()
@@ -924,12 +1032,7 @@ def _feedback_store(line):
         try:
             start = os.fstat(fd).st_size
             try:
-                view = memoryview(line)
-                while view:
-                    done = os.write(fd, view)
-                    if done <= 0:
-                        raise OSError('os.write devolvió %d' % done)
-                    view = view[done:]
+                _feedback_write_all(fd, line)
             except BaseException:
                 try:
                     os.ftruncate(fd, start)   # ni media línea en el fichero

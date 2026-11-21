@@ -57,6 +57,18 @@ EXAMPLE = PAYLOADS['valid'][0]['payload']   # el «no me gusta» de ejemplo de l
 PROBE_BODY = (b'{"v":1,"action":"report","rated":null,"app":"chat","build":"probe","model":null,"lang":"en",'
               b'"anonymizer":"0.0.0","cut":{"dropped":0,"shortened":0},"messages":[{"role":"user","text":"probe"}]}')
 BROWSER = ('Origin', 'Sec-Fetch-Site', 'Sec-Fetch-Mode', 'Sec-Fetch-Dest')
+UTC = datetime.timezone.utc
+KEPT = re.compile(r'feedback-[0-9]{4}-[0-9]{2}-[0-9]{2}(?:\.[0-9]+)?\.jsonl')
+
+
+def midnight_ns(day):
+    """Las 00:00 UTC de day, en nanosegundos desde 1970."""
+    return int(datetime.datetime.combine(day, datetime.time(), tzinfo=UTC).timestamp()) * 10**9
+
+
+def day_of(path):
+    """El día UTC de la mtime de path (el que el servidor le da a su fichero activo)."""
+    return datetime.datetime.fromtimestamp(path.stat().st_mtime, UTC).date()
 
 
 def body_of(payload):
@@ -504,6 +516,87 @@ class Storage(FeedbackCase):
             self.assertAnswer(self.post(EXAMPLE), 200)
         self.assertEqual(sorted(os.listdir(self.dir)), sorted(kept + ['feedback.jsonl']))
 
+    def likes(self, n, sent):
+        """n envíos guardados; apunta en sent la hora de antes y la de después de cada uno."""
+        for _ in range(n):
+            sent.append(time.time())
+            self.assertAnswer(self.post(EXAMPLE), 200)
+            sent.append(time.time())
+
+    def assertKeepsNoPostTime(self, kept, day, sent):
+        """El fichero de un día cerrado no guarda la hora de ningún envío: mtime
+        y atime son las 00:00 UTC de ese día, y su creación y su ctime son del
+        conserje (más de 1 s después del último envío)."""
+        st = os.stat(kept)   # antes de leerlo: leer cambia la atime
+        self.assertEqual((st.st_mtime_ns, st.st_atime_ns), (midnight_ns(day), midnight_ns(day)), kept.name)
+        times = {'mtime': st.st_mtime, 'atime': st.st_atime, 'ctime': st.st_ctime}
+        if hasattr(st, 'st_birthtime'):   # la hora de creación, donde os.stat la da
+            times['birth'] = st.st_birthtime
+        for name, when in times.items():
+            for t in sent:
+                self.assertGreater(abs(when - t), 1.0, '%s de %s: a %.3f s de un envío' % (name, kept.name, when - t))
+        self.assertEqual(stat.S_IMODE(st.st_mode), 0o600)
+
+    def test_the_day_after_a_post_rotates_and_the_janitor_leaves_no_time_of_any_post(self):
+        # Antes: la creación del fichero del día era la hora del primer envío,
+        # su mtime la del último y su ctime la del primero del día siguiente,
+        # 90 días. Con un envío o dos al día, la hora exacta de cada uno.
+        sent = []
+        self.likes(2, sent)
+        day = day_of(self.path)
+        lines = sorted(self.path.read_bytes().splitlines())
+        live = self.path.stat().st_ino
+        tomorrow = day + datetime.timedelta(days=1)
+        with mock.patch.object(serve, '_feedback_today', lambda: tomorrow):
+            self.likes(1, sent)
+            kept = self.dir / ('feedback-%s.jsonl' % day.isoformat())
+            # Un envío solo renombra: nunca escribe un fichero que se guarda.
+            self.assertEqual(kept.stat().st_ino, live)
+            # El reloj de verdad sigue en day: que el fichero de «mañana» lo sea.
+            later = midnight_ns(tomorrow) + 60 * 10**9
+            os.utime(self.path, ns=(later, later))
+            time.sleep(1.2)
+            serve._feedback_tidy()   # el conserje, que pasa justo después de las 00:00 UTC
+        self.assertKeepsNoPostTime(kept, day, sent)
+        self.assertEqual(sorted(kept.read_bytes().splitlines()), lines, 'las mismas líneas')
+        self.assertEqual(len(self.lines()), 1, 'el fichero de hoy no se toca')
+        self.assertEqual(sorted(os.listdir(self.dir)), sorted(['feedback.jsonl', kept.name]), 'ni un temporal')
+
+    def test_a_quiet_day_is_rotated_by_the_janitor_and_keeps_no_time_of_any_post(self):
+        sent = []
+        self.likes(3, sent)
+        day = day_of(self.path)
+        lines = sorted(self.path.read_bytes().splitlines())
+        time.sleep(1.2)
+        with mock.patch.object(serve, '_feedback_today', lambda: day + datetime.timedelta(days=1)):
+            serve._feedback_tidy()
+        kept = self.dir / ('feedback-%s.jsonl' % day.isoformat())
+        self.assertEqual(os.listdir(self.dir), [kept.name])
+        self.assertKeepsNoPostTime(kept, day, sent)
+        self.assertEqual(sorted(kept.read_bytes().splitlines()), lines)
+
+    def test_the_janitor_rewrites_a_kept_file_once_with_its_lines_shuffled(self):
+        self.dir.mkdir(mode=0o700)
+        lines = [b'{"n":%d}' % i for i in range(40)]
+        kept = self.dir / self.rotated(3)
+        kept.write_bytes(b''.join(line + b'\n' for line in lines))
+        # Lo que deja una pasada cortada a medias (con datos dentro): se va.
+        half = self.dir / '.feedback-scrub-0123456789abcdef.tmp'
+        half.write_bytes(b'{"n":0}\n')
+        with mock.patch.object(serve, '_feedback_today', lambda: self.TODAY):
+            serve._feedback_tidy()
+            first = os.stat(kept)
+            serve._feedback_tidy()
+            second = os.stat(kept)
+        self.assertEqual(first.st_mtime_ns, midnight_ns(self.TODAY - datetime.timedelta(days=3)))
+        self.assertEqual((first.st_ino, first.st_ctime_ns), (second.st_ino, second.st_ctime_ns),
+                         'ya rehecho (mtime a las 00:00): no se vuelve a tocar')
+        got = kept.read_bytes().splitlines()
+        self.assertEqual(sorted(got), sorted(lines))
+        self.assertNotEqual(got, lines, 'el orden de llegada no queda')
+        self.assertFalse(half.exists())
+        self.assertEqual(os.listdir(self.dir), [kept.name])
+
     def test_the_stored_line_is_pure_ascii_and_reads_back_the_same(self):
         # Controles C1 (CSI, OSC … ST: una terminal los ejecutaría con cat o
         # tail), los que dan la vuelta al texto, U+2028 y U+2029, y letras.
@@ -711,7 +804,7 @@ class Units(unittest.TestCase):
             self.assertEqual(serve.FEEDBACK_DAY_MAX_BYTES, 2 << 20)
         self.assertEqual(serve.FEEDBACK_TOTAL_MAX_BYTES, 200 << 20)
         self.assertEqual((serve.FEEDBACK_READ_TIMEOUT_S, serve.FEEDBACK_RETRY_AFTER_S), (10, 600))
-        self.assertEqual(serve.FEEDBACK_TIDY_EVERY_S, 6 * 3600)
+        self.assertEqual((serve.FEEDBACK_TIDY_EVERY_S, serve.FEEDBACK_TIDY_AFTER_MIDNIGHT_S), (3600, 2))
 
     @staticmethod
     def load(**env):
@@ -892,15 +985,53 @@ class Units(unittest.TestCase):
             raise PermissionError(13, 'Permission denied', 'ruta-que-no-se-escribe')
 
         def sleep(seconds):
-            self.assertEqual(seconds, 6 * 3600)
+            self.assertEqual(seconds, 1234.5)
             if len(calls) >= 2:
                 raise Stop()
         err = io.StringIO()
         with mock.patch.object(serve, '_feedback_tidy', failing_tidy), mock.patch.object(serve.time, 'sleep', sleep), \
+                mock.patch.object(serve, '_feedback_janitor_wait', lambda: 1234.5), \
                 mock.patch.object(serve.sys, 'stderr', err):
             with self.assertRaises(Stop):
                 serve._feedback_janitor()
         self.assertEqual(err.getvalue(), '· feedback: tidy failed (PermissionError)\n' * 2)
+
+    def test_the_janitor_passes_just_after_midnight_utc_and_at_least_every_hour(self):
+        # Justo después de las 00:00 UTC rehace el fichero del día que acaba de
+        # cerrar; cada hora como mucho, por si el reloj salta.
+        def wait(*hms):
+            return serve._feedback_janitor_wait(datetime.datetime(2026, 11, 20, *hms, tzinfo=UTC))
+        after = serve.FEEDBACK_TIDY_AFTER_MIDNIGHT_S
+        self.assertEqual(wait(23, 59, 50), 10 + after)
+        self.assertEqual(wait(23, 30), 1800 + after)
+        self.assertEqual(wait(12, 0), serve.FEEDBACK_TIDY_EVERY_S)
+        self.assertEqual(wait(0, 0, 3), serve.FEEDBACK_TIDY_EVERY_S)
+        self.assertLessEqual(serve._feedback_janitor_wait(), serve.FEEDBACK_TIDY_EVERY_S)
+
+    def test_a_scrub_that_fails_leaves_no_temporary_file_and_the_others_still_go(self):
+        tmp = Path(tempfile.mkdtemp(prefix='elffuss-feedback-'))
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        today = datetime.date(2026, 11, 20)
+        names = ['feedback-2026-11-17.jsonl', 'feedback-2026-11-18.jsonl', 'feedback-2026-11-19.jsonl']
+        for name in names:
+            (tmp / name).write_bytes(b'{"n":1}\n{"n":2}\n')
+        real_replace, calls = os.replace, []
+
+        def replace(src, dst):
+            calls.append(Path(dst).name)
+            if len(calls) == 1:
+                raise OSError(errno.ENOSPC, 'No space left on device')
+            return real_replace(src, dst)
+        with mock.patch.object(serve, 'FEEDBACK_PATH', str(tmp / 'feedback.jsonl')), \
+                mock.patch.object(serve, 'ROOT', str(tmp / 'web')), \
+                mock.patch.object(serve, '_feedback_today', lambda: today), \
+                mock.patch.object(serve.os, 'replace', replace):
+            with self.assertRaises(OSError):
+                serve._feedback_tidy()
+        self.assertEqual(sorted(os.listdir(tmp)), names, 'ni un temporal')
+        done = [n for n in names if os.stat(tmp / n).st_mtime_ns == midnight_ns(datetime.date.fromisoformat(n[9:19]))]
+        self.assertEqual(sorted(done), sorted(calls[1:]), 'el fallo de uno no para a los demás')
+        self.assertEqual(len(done), 2)
 
 
 if __name__ == '__main__':
