@@ -94,6 +94,15 @@ def sized(n):
     return p
 
 
+def worst():
+    """El aviso válido que más ocupa guardado: un cuerpo del tope lleno de «é»
+    (2 bytes en el cuerpo, 6 en la línea) → (payload, cuerpo)."""
+    payload = sized(serve.FEEDBACK_MAX_BYTES)
+    for m in payload['messages']:
+        m['text'] = 'é' * (len(m['text']) // 2)
+    return payload, body_of(payload)
+
+
 class _Server(socketserver.ThreadingTCPServer):
     daemon_threads = True
     allow_reuse_address = True
@@ -113,6 +122,8 @@ class FeedbackCase(unittest.TestCase):
                                     (serve, 'ROOT', str(self.root)),
                                     (serve, 'FEEDBACK_RATE', serve._FeedbackLimiter(600, 10_000)),
                                     (serve, 'FEEDBACK_GLOBAL_RATE', serve._FeedbackLimiter(3600, 10_000)),
+                                    # la parte del día de cada cliente, de verdad (y vacía en cada prueba)
+                                    (serve, 'FEEDBACK_CLIENT_DAY', serve._FeedbackDayBytes(serve.FEEDBACK_CLIENT_DAY_MAX_BYTES)),
                                     (serve.sys, 'stderr', self.err)):
             patcher = mock.patch.object(target, name, value)
             patcher.start()
@@ -374,7 +385,8 @@ class Refuses(FeedbackCase):
     def test_refusals_leave_nothing_in_the_log_either(self):
         leftover = json.loads(json.dumps(EXAMPLE))
         leftover['messages'][0]['text'] = 'escribe a ana@correo.es'
-        with mock.patch.object(serve, 'FEEDBACK_RATE', serve._FeedbackLimiter(600, 1)):
+        with mock.patch.object(serve, 'FEEDBACK_RATE', serve._FeedbackLimiter(600, 1)), \
+                mock.patch.object(serve, 'FEEDBACK_CLIENT_DAY', serve._FeedbackDayBytes(1)):
             got = [self.post(EXAMPLE, headers={'Sec-Fetch-Site': 'cross-site'})[0],
                    self.post(EXAMPLE, headers={'Content-Type': 'text/plain'})[0],
                    self.send(length=None)[0], self.send(length='abc')[0],
@@ -382,8 +394,10 @@ class Refuses(FeedbackCase):
                    self.send(b'{"v": 1}', headers={'X-Forwarded-For': '192.0.2.1'})[0],
                    self.send(b'{"v": 1}', headers={'X-Forwarded-For': '192.0.2.1'})[0],
                    self.post(leftover, headers={'X-Forwarded-For': '192.0.2.2'})[0],
-                   self.send(b'{', headers={'X-Forwarded-For': '192.0.2.3'})[0]]
-        self.assertEqual(got, [403, 415, 411, 400, 413, 400, 429, 422, 400])
+                   self.send(b'{', headers={'X-Forwarded-For': '192.0.2.3'})[0],
+                   self.post(EXAMPLE, headers={'X-Forwarded-For': '192.0.2.4'})]
+        self.assertEqual(got[:-1], [403, 415, 411, 400, 413, 400, 429, 422, 400])
+        self.assertAnswer(got[-1], 429, 'daily-limit')   # más que la parte del día de ese cliente
         self.assertEqual(self.err.getvalue(), '')
 
     def test_only_post_to_the_exact_path(self):
@@ -460,6 +474,65 @@ class Limits(FeedbackCase):
         self.assertAnswer(got[2], 503, 'overloaded')
         self.assertEqual(got[2][1].get('retry-after'), '600')
         self.assertEqual(len(self.lines()), 4)
+
+    def assertDailyLimit(self, got):
+        self.assertAnswer(got, 429, 'daily-limit')
+        # Hasta las próximas 00:00 UTC, que es cuando vuelve a haber.
+        self.assertTrue(1 <= int(got[1]['retry-after']) <= 86400, got[1].get('retry-after'))
+
+    @unittest.skipIf('ELFFUSS_FEEDBACK_DAYS' in os.environ, 'el tope del día depende de ELFFUSS_FEEDBACK_DAYS')
+    def test_one_client_cannot_fill_the_day_and_two_cannot_either(self):
+        # Antes, tres envíos del peor tamaño desde una sola dirección llenaban
+        # el día, y todos los demás recibían 503 full hasta las 00:00 UTC.
+        payload, body = worst()
+        line = len(stored_line(payload))
+        got = {ip: [self.send(body, headers={'X-Forwarded-For': ip}) for _ in range(3)]
+               for ip in ('203.0.113.5', '2001:db8:5:1ff::7')}
+        for answers in got.values():
+            self.assertAnswer(answers[0], 200)
+            for refused in answers[1:]:
+                self.assertDailyLimit(refused)
+        self.assertEqual(self.path.stat().st_size, 2 * line)
+        # Y queda sitio para los demás: un tercer cliente guarda un aviso del tope.
+        room = serve.FEEDBACK_DAY_MAX_BYTES - 2 * serve.FEEDBACK_CLIENT_DAY_MAX_BYTES
+        full = sized(serve.FEEDBACK_MAX_BYTES)
+        self.assertLessEqual(len(stored_line(full)), room)
+        self.assertAnswer(self.post(full, headers={'X-Forwarded-For': '198.51.100.7'}), 200)
+        self.assertEqual(len(self.lines()), 3)
+
+    def test_the_share_of_a_day_is_spent_only_by_what_is_stored_and_comes_back_the_next_day(self):
+        line = len(stored_line(EXAMPLE))
+        leftover = json.loads(json.dumps(EXAMPLE))
+        leftover['messages'][0]['text'] = 'escribe a ana@correo.es'
+        me = {'X-Forwarded-For': '192.0.2.40'}
+        with mock.patch.object(serve, 'FEEDBACK_CLIENT_DAY', serve._FeedbackDayBytes(3 * line)):
+            # Lo que no se guarda no gasta: basura, la red de seguridad, un día lleno.
+            self.assertAnswer(self.post(leftover, headers=me), 422, 'leftover')
+            self.assertAnswer(self.send(b'{', headers=me), 400, 'bad-json')
+            with mock.patch.object(serve, 'FEEDBACK_DAY_MAX_BYTES', 10):
+                self.assertAnswer(self.post(EXAMPLE, headers=me), 503, 'full')
+            self.assertEqual([self.post(EXAMPLE, headers=me)[0] for _ in range(3)], [200, 200, 200])
+            # Sin nada de su parte: se rechaza antes de leer el cuerpo.
+            with mock.patch.object(serve, '_feedback_parse', side_effect=AssertionError('leído')):
+                self.assertDailyLimit(self.post(EXAMPLE, headers=me))
+            self.assertAnswer(self.post(EXAMPLE, headers={'X-Forwarded-For': '192.0.2.41'}), 200)
+            tomorrow = day_of(self.path) + datetime.timedelta(days=1)
+            with mock.patch.object(serve, '_feedback_today', lambda: tomorrow):
+                self.assertAnswer(self.post(EXAMPLE, headers=me), 200)
+        self.assertEqual(len(self.lines()), 1, 'el de hoy; los cuatro de ayer, en su fichero')
+
+    def test_two_posts_at_once_cannot_both_take_the_last_of_a_share(self):
+        line = len(stored_line(EXAMPLE))
+        statuses = []
+        with mock.patch.object(serve, 'FEEDBACK_CLIENT_DAY', serve._FeedbackDayBytes(line + 10)):
+            threads = [threading.Thread(target=lambda: statuses.append(
+                self.post(EXAMPLE, headers={'X-Forwarded-For': '192.0.2.42'})[0])) for _ in range(6)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join(60)
+        self.assertEqual(sorted(statuses), [200] + [429] * 5)
+        self.assertEqual(len(self.lines()), 1)
 
 
 class Storage(FeedbackCase):
@@ -617,19 +690,17 @@ class Storage(FeedbackCase):
     @unittest.skipIf('ELFFUSS_FEEDBACK_DAYS' in os.environ, 'el tope del día depende de ELFFUSS_FEEDBACK_DAYS')
     def test_the_daily_cap_measures_the_escaped_line_and_holds_two_of_the_worst(self):
         # La peor línea: un cuerpo del tope lleno de «é» (2 bytes, 6 al escaparla).
-        payload = sized(serve.FEEDBACK_MAX_BYTES)
-        for m in payload['messages']:
-            m['text'] = 'é' * (len(m['text']) // 2)
-        body = body_of(payload)
+        payload, body = worst()
         self.assertLessEqual(len(body), serve.FEEDBACK_MAX_BYTES)
         line = len(stored_line(payload))
         self.assertGreater(line, 2.9 * len(body))
         self.assertLessEqual(line, 3 * len(body))
-        self.assertAnswer(self.send(body), 200)
-        self.assertAnswer(self.send(body), 200)
+        # Tres clientes: uno solo no pasa de su parte del día (Limits).
+        self.assertAnswer(self.send(body, headers={'X-Forwarded-For': '192.0.2.101'}), 200)
+        self.assertAnswer(self.send(body, headers={'X-Forwarded-For': '192.0.2.102'}), 200)
         self.assertLessEqual(2 * line, serve.FEEDBACK_DAY_MAX_BYTES)
         self.assertGreater(3 * line, serve.FEEDBACK_DAY_MAX_BYTES)
-        self.assertAnswer(self.send(body), 503, 'full')
+        self.assertAnswer(self.send(body, headers={'X-Forwarded-For': '192.0.2.103'}), 503, 'full')
         self.assertEqual(self.path.stat().st_size, 2 * line)
 
     def test_the_daily_cap_answers_full_and_writes_nothing(self):
@@ -802,6 +873,12 @@ class Units(unittest.TestCase):
         if 'ELFFUSS_FEEDBACK_DAYS' not in os.environ:
             self.assertEqual(serve.FEEDBACK_KEEP_DAYS, 90)
             self.assertEqual(serve.FEEDBACK_DAY_MAX_BYTES, 2 << 20)
+            # Cada cliente, el 40 % del día: a uno le cabe el peor aviso entero,
+            # y hacen falta tres para llenarlo.
+            self.assertEqual(serve.FEEDBACK_CLIENT_DAY_MAX_BYTES, 838_860)
+            self.assertGreaterEqual(serve.FEEDBACK_CLIENT_DAY_MAX_BYTES, len(stored_line(worst()[0])))
+        self.assertEqual(serve.FEEDBACK_CLIENT_DAY_MAX_BYTES, serve.FEEDBACK_DAY_MAX_BYTES * 2 // 5)
+        self.assertEqual(serve.FEEDBACK_CLIENT_DAY.max_bytes, serve.FEEDBACK_CLIENT_DAY_MAX_BYTES)
         self.assertEqual(serve.FEEDBACK_TOTAL_MAX_BYTES, 200 << 20)
         self.assertEqual((serve.FEEDBACK_READ_TIMEOUT_S, serve.FEEDBACK_RETRY_AFTER_S), (10, 600))
         self.assertEqual((serve.FEEDBACK_TIDY_EVERY_S, serve.FEEDBACK_TIDY_AFTER_MIDNIGHT_S), (3600, 2))
@@ -837,6 +914,8 @@ class Units(unittest.TestCase):
                 self.assertLessEqual(module.FEEDBACK_DAY_MAX_BYTES * (module.FEEDBACK_KEEP_DAYS + 1),
                                      module.FEEDBACK_TOTAL_MAX_BYTES)
                 self.assertLessEqual(module.FEEDBACK_DAY_MAX_BYTES, 2 << 20)
+                # Dos clientes con su parte entera no llenan el día.
+                self.assertLess(2 * module.FEEDBACK_CLIENT_DAY_MAX_BYTES, module.FEEDBACK_DAY_MAX_BYTES)
 
     def test_the_client_key_is_the_address_or_its_ipv6_56(self):
         key = serve._feedback_rate_key

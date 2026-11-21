@@ -533,7 +533,8 @@ PROXY_RATE = _RateLimiter(PROXY_RATE_WINDOW_S, PROXY_RATE_MAX)
 #  · límites solo en memoria, por cliente (_feedback_rate_key: una IPv6 cuenta
 #    por su /56) y entre todos; no se escriben ni salen en el log. El cupo de
 #    todos solo lo gasta un envío que pasa el esquema y la red de seguridad: la
-#    basura de unos pocos no cierra la puerta a los demás;
+#    basura de unos pocos no cierra la puerta a los demás. Cada cliente guarda
+#    como mucho el 40 % de un día (FEEDBACK_CLIENT_DAY): llenarlo pide tres;
 #  · ni una línea en el log por envío, tampoco la de la petición
 #    (_feedback_unlogged): con su hora, y las líneas del fichero en orden de
 #    llegada, se sabría qué línea mandó quién;
@@ -588,6 +589,36 @@ class _FeedbackLimiter(_RateLimiter):
             return 'ok' if ok else 'limited'
 
 
+class _FeedbackDayBytes:
+    """Los bytes de línea que ha guardado hoy (día UTC, _feedback_today) cada
+    cliente. Solo en memoria: ni se escribe ni sale en el log, y se vacía al
+    cambiar el día. Solo lo gasta lo que se guarda (_feedback_store), así que
+    hay como mucho una clave por envío guardado, y esos los acota el cupo de
+    todos."""
+
+    def __init__(self, max_bytes):
+        self.max_bytes = max_bytes
+        self._lock = threading.Lock()
+        self._day = None
+        self._used = {}
+
+    def _roll(self):
+        today = _feedback_today()
+        if today != self._day:
+            self._day, self._used = today, {}
+
+    def left(self, key):
+        """Lo que a key le queda hoy (0 o menos: nada)."""
+        with self._lock:
+            self._roll()
+            return self.max_bytes - self._used.get(key, 0)
+
+    def spend(self, key, n):
+        with self._lock:
+            self._roll()
+            self._used[key] = self._used.get(key, 0) + n
+
+
 FEEDBACK_PATH = os.environ.get('ELFFUSS_FEEDBACK') or str(
     Path(os.environ.get('ELFFUSS_REPORTS') or (Path.home() / 'elffuss' / 'reports.jsonl')).parent / 'feedback.jsonl')
 FEEDBACK_MAX_BYTES = 262_144          # = CAPS.bodyBytes de feedback-payload.js = client_max_body_size de nginx
@@ -604,6 +635,12 @@ FEEDBACK_KEEP_DAYS = max(0, int(os.environ.get('ELFFUSS_FEEDBACK_DAYS') or 90))
 # queda de ese día UTC y nada más; si mandase el total, la puerta seguiría
 # cerrada hasta que la poda borrase algo, meses después.
 FEEDBACK_DAY_MAX_BYTES = min(2 * 1024 * 1024, FEEDBACK_TOTAL_MAX_BYTES // (FEEDBACK_KEEP_DAYS + 1))
+# La parte de un día de cada cliente (_feedback_rate_key), en bytes de línea:
+# el 40 %. Con los topes de siempre le cabe el peor aviso (un cuerpo de 256 KiB
+# lleno de «é», 768 KiB guardado) y hacen falta tres clientes para llenar el
+# día; antes bastaba uno con tres envíos.
+FEEDBACK_CLIENT_DAY_MAX_BYTES = FEEDBACK_DAY_MAX_BYTES * 2 // 5
+FEEDBACK_CLIENT_DAY = _FeedbackDayBytes(FEEDBACK_CLIENT_DAY_MAX_BYTES)
 # El hilo pasa justo después de cada 00:00 UTC (con este margen), para rehacer
 # enseguida el fichero del día que cierra, y como mucho cada hora, por si el
 # reloj salta.
@@ -1008,25 +1045,31 @@ def _feedback_line(payload):
     return (json.dumps(payload, ensure_ascii=True, separators=(',', ':')) + '\n').encode('ascii')
 
 
-def _feedback_store(line):
-    """Anexa una línea (bytes) al fichero del día → True, o False si con ella
-    se pasaría del tope del día o del total (503 full). Cualquier otro fallo es
-    una excepción. La línea es ASCII puro (ver _feedback_line): un envío es una
-    línea, y se lee igual con for line in f que con str.splitlines(). Rota y
-    poda, pero nunca rehace un fichero (lo hace el hilo: _feedback_scrub_locked)."""
+def _feedback_store(line, key):
+    """Anexa una línea (bytes) al fichero del día → None, o sin escribir nada
+    el código del rechazo: 'daily-limit' si key se pasaría de su parte del día
+    (429), 'full' si se pasaría del tope del día o del total (503). Cualquier
+    otro fallo es una excepción. La línea es ASCII puro (ver _feedback_line):
+    un envío es una línea, y se lee igual con for line in f que con
+    str.splitlines(). Rota y poda, pero nunca rehace un fichero (lo hace el
+    hilo: _feedback_scrub_locked)."""
     path = Path(FEEDBACK_PATH)
     if _feedback_inside_root(path):
         raise _FeedbackInsideRoot()
     with _FEEDBACK_LOCK:
         path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         _feedback_tidy_locked(path)
+        # Otra vez, ya con el cerrojo: dos envíos a la vez del mismo cliente no
+        # se llevan entre los dos más de lo que le queda.
+        if len(line) > FEEDBACK_CLIENT_DAY.left(key):
+            return 'daily-limit'
         try:
             size = os.stat(path).st_size
         except FileNotFoundError:
             size = 0
         if (size + len(line) > FEEDBACK_DAY_MAX_BYTES
                 or _feedback_total(path) + len(line) > FEEDBACK_TOTAL_MAX_BYTES):
-            return False
+            return 'full'
         flags = os.O_WRONLY | os.O_APPEND | os.O_CREAT | getattr(os, 'O_NOFOLLOW', 0) | getattr(os, 'O_CLOEXEC', 0)
         fd = os.open(path, flags, 0o600)
         try:
@@ -1041,7 +1084,8 @@ def _feedback_store(line):
                 raise
         finally:
             os.close(fd)
-    return True
+        FEEDBACK_CLIENT_DAY.spend(key, len(line))
+    return None
 
 
 def _feedback_ready():
@@ -1128,19 +1172,25 @@ def _feedback_handle(h):
             _feedback_read(h, length, keep=False)
         return _feedback_answer(h, status, error, retry_after)
 
+    def tomorrow():   # Retry-After de 'daily-limit': a las 00:00 UTC vuelve a haber
+        return int(_feedback_to_midnight()) + 1
+
     if not h._proxy_caller_ok():                                     # 1. quién llama
         return refuse(403, 'cross-site')
     if not _feedback_is_json(h.headers):                             # 2. JSON
         return refuse(415, 'content-type')
     if length_error:                                                 # 3 y 4. longitud (413 sin leer)
         return _feedback_answer(h, *length_error)
-    took = FEEDBACK_RATE.take(_feedback_rate_key(h.client_ip()))     # 5. por cliente, en memoria
+    key = _feedback_rate_key(h.client_ip())
+    took = FEEDBACK_RATE.take(key)                                   # 5. por cliente, en memoria
     if took == 'limited':
         return refuse(429, 'rate-limited', FEEDBACK_RETRY_AFTER_S)
     # 6. Entre todos: aquí solo se mira, el cupo lo gasta un envío que pasa de
     # la 8 a la 10. Una tabla de clientes llena también es «demasiado».
     if took != 'ok' or FEEDBACK_GLOBAL_RATE.full('*'):
         return refuse(503, 'overloaded', FEEDBACK_RETRY_AFTER_S)
+    if FEEDBACK_CLIENT_DAY.left(key) <= 0:                           # 5 bis. su parte del día, sin leer
+        return refuse(429, 'daily-limit', tomorrow())
     body = _feedback_read(h, length)                                 # 7. el cuerpo, con plazo
     if body is None:
         return _feedback_answer(h, 400, 'bad-length')
@@ -1151,6 +1201,7 @@ def _feedback_handle(h):
         bad = _feedback_schema_error(payload)
         leftover = bad is None and any(_feedback_leftover(m['text']) for m in payload['messages']
                                        if m['role'] in ('user', 'assistant'))
+        line = None if bad or leftover else _feedback_line(payload)
     except Exception:  # noqa: BLE001 — un fallo aquí es un rechazo, nunca un 500 que cuente nada
         bad, leftover = 'error', False
     if bad:
@@ -1159,15 +1210,20 @@ def _feedback_handle(h):
         return _feedback_answer(h, 422, 'leftover')
     if _feedback_is_probe(h):                                        # 11. la sonda no escribe ni gasta
         return _feedback_answer(h, 204) if _feedback_ready() else _feedback_answer(h, 500, 'storage')
+    # 5 bis, con la línea ya medida: quien no tiene sitio para ella no gasta el cupo de todos.
+    if len(line) > FEEDBACK_CLIENT_DAY.left(key):
+        return _feedback_answer(h, 429, 'daily-limit', tomorrow())
     if not FEEDBACK_GLOBAL_RATE.allow('*'):                          # 6 bis. ahora sí, el cupo de todos
         return _feedback_answer(h, 503, 'overloaded', FEEDBACK_RETRY_AFTER_S)
     try:                                                             # 12. guardar
-        stored = _feedback_store(_feedback_line(payload))
+        refused = _feedback_store(line, key)
     except Exception as e:  # noqa: BLE001 — solo el nombre de la excepción: su texto lleva rutas
         h.log_message('feedback: storage failed (%s)', type(e).__name__)
         return _feedback_answer(h, 500, 'storage')
-    if not stored:
-        return _feedback_answer(h, 503, 'full')
+    if refused == 'daily-limit':
+        return _feedback_answer(h, 429, 'daily-limit', tomorrow())
+    if refused:
+        return _feedback_answer(h, 503, refused)
     return _feedback_answer(h, 200)                                  # 13.
 # ---- end /proxy/feedback ----
 
